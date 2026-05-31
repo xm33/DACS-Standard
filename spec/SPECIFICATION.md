@@ -2,13 +2,13 @@
 
 **Introduction and DACS-1 through DACS-5**
 
-> Published as DACS **v0.1** (paper v0.8 + DACS-1..5 v0.2 reconciled). See [CHANGELOG](../CHANGELOG.md) for normative change history.
+> Published as DACS **v0.1** — the first publicly released version, with all five per-stage standards versioned together as a single document. See [CHANGELOG](../CHANGELOG.md) for normative change history.
 
 ## About this document
 
 This document specifies DACS — the Demos Agent Commerce Standards — across five per-stage standards: DACS-1 (Identify), DACS-2 (Vet), DACS-3 (Negotiate), DACS-4 (Settle), and DACS-5 (Verify). Shared material (terminology, substrate capabilities, the Demos production mapping, references) is presented once in the front and back matter rather than repeated per chapter. Each per-stage chapter contains the material specific to that stage. The companion DACS Dev Tasks working document is published separately and is **not** part of the standards.
 **Normative language.** This document uses the RFC 2119 / RFC 8174 keywords **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL**, interpreted as in those RFCs. Keywords are normative only when in uppercase.
-**Version coupling.** This document is paper v0.8 and DACS-1..5 v0.2. Each per-stage specification versions independently; the highest-published minor version per stage MUST be coherent with the paper version cited in its front matter.
+**Versioning.** This document is **DACS v0.1**, the first publicly released version. Earlier drafts circulated internally under per-stage version numbers (DACS-1..5 v0.1, paper v0.7) and a brief v0.8 cut that consolidated review-pass revisions; those numbers are retired in favour of a single document-level version. From v0.1 onward, the entire DACS standard (all five per-stage standards plus the front-matter substrate-binding, the threat model, the glossary, and the conformance plan) versions together. Per-stage specs do not version independently. Future versions will be v0.2, v0.3, and so on through to v1.0 once the standard is considered ready for unsupervised production use.
 
 ## Abstract
 
@@ -165,7 +165,7 @@ DACS composes with the following open standards. Each per-stage chapter cites th
 | ACME / RFC 8555 | DACS-2 | domain-tls-control method |
 
 ## Chapter 6 — DACS-1: Identify
-**Stage:** Identify (1st of 5). **Status:** Draft v0.2. **Depends on:** SR-1 (optional), SR-2 (required); composes with ERC-8004, W3C DIDs, A2A. **Used by:** DACS-2..5.
+**Stage:** Identify (1st of 5). **Status:** Draft (part of DACS v0.1). **Depends on:** SR-1 (optional), SR-2 (required); composes with ERC-8004, W3C DIDs, A2A. **Used by:** DACS-2..5.
 
 ### 6.1 Abstract
 
@@ -356,7 +356,7 @@ Read endpoints MUST NOT require authentication. Write/registration semantics are
 **Private endpoints and impersonation.** *Threat:* seller.publicEndpoint claims a URL the seller does not control. *Mitigation:* this is a self-claim; readers MUST NOT treat the endpoint as authoritative for any cryptographic purpose. Endpoints are conveniences for off-chain reads, not trust anchors.
 **Key lifecycle.** Every spec assumes a primary key exists per ClaimReference. Implementations MUST hold primary keys in a key-management system that does not retain plaintext at rest (HSM, TEE-backed enclave, or equivalent); support rotation (the relationship between a ClaimReference and its current key may change over time; the DACS-2 recipe for a scheme defines how key-current-ness is resolved); propagate revocation (publish a revocation marker for any listings the key signed, update bundle presentations to use a new key going forward); treat signatures produced by a key after its revocation timestamp as invalid for new sessions; sessions already past commit-agreement using the prior key remain bound (the obligation already exists).
 ## Chapter 7 — DACS-2: Vet
-**Stage:** Vet (2nd of 5). **Status:** Draft v0.2. **Depends on:** SR-2 (required), SR-3 (required for consensus-backed-proxy and evm-rpc methods); composes with W3C VC, TLSNotary, zkTLS / Reclaim. **Used by:** DACS-1 (claim verification), DACS-3 (pre-negotiation gate), DACS-5 (audit references).
+**Stage:** Vet (2nd of 5). **Status:** Draft (part of DACS v0.1). **Depends on:** SR-2 (required), SR-3 (required for consensus-backed-proxy and evm-rpc methods); composes with W3C VC, TLSNotary, zkTLS / Reclaim. **Used by:** DACS-1 (claim verification), DACS-3 (pre-negotiation gate), DACS-5 (audit references).
 
 ### 7.1 Abstract
 
@@ -592,7 +592,7 @@ Re-running vet-credentials with the same inputs MUST produce the same composite-
 **Composite record forgery.** *Threat:* an attacker constructs a composite record with overallDecision = "pass" and false VerifyResultRefs. *Mitigation:* the composite record is signed by the verifier; consumers verify the signature. The bundleHash and requirementHash fields bind the record to specific inputs; consumers verify these against the inputs they actually used. Each VerifyResultRef MUST be dereferenced and content-hash-validated before the composite record is accepted.
 **Indeterminate-decision exploitation.** *Threat:* an attacker arranges for a required claim’s verification to fail in a way that returns indeterminate rather than fail, hoping consumers treat the result as pass. *Mitigation:* indeterminate is not pass. The aggregation algorithm treats indeterminate in a required position as overall indeterminate, which MUST fail the phase.
 ## Chapter 8 — DACS-3: Negotiate
-**Stage:** Negotiate (3rd of 5). **Status:** Draft v0.2. **Depends on:** SR-2 (required for public commitments), SR-4 (required for genuinely private negotiation patterns); references DACS-1 listings and DACS-2 verified bundles. **Used by:** DACS-4 (pricing + rail input to settlement), DACS-5 (agreement reference in session bundle).
+**Stage:** Negotiate (3rd of 5). **Status:** Draft (part of DACS v0.1). **Depends on:** SR-2 (required for public commitments), SR-4 (required for genuinely private negotiation patterns); references DACS-1 listings and DACS-2 verified bundles. **Used by:** DACS-4 (pricing + rail input to settlement), DACS-5 (agreement reference in session bundle).
 
 ### 8.1 Abstract
 
@@ -749,7 +749,7 @@ A DACS-1 listing’s pipeline declares which negotiation pattern is used. Each P
 **Channel-membership exfiltration.** *Threat:* the channel operator (or a compromised member) leaks the negotiation transcript publicly. *Mitigation:* DACS-3 cannot prevent this technically — once a member sees the transcript, they can leak it. Listings handling sensitive flows SHOULD restrict membership to known counterparties; the leak risk reduces to counterparty-trust risk, which DACS-2 verification helps quantify.
 **Late-revealing bidder denial-of-service.** *Threat:* in sealed-envelope, a bidder commits and then deliberately fails to reveal, hoping to disrupt the auction. *Mitigation:* SE-4 excludes non-revealing bidders from selection and marks them with a reputation event. Repeated failures damage their DACS-5 reputation. Listings MAY require a stake from bidders (escrowed at commit, returned on reveal) to make denial-of-service costly; v1 does not standardise stake.
 ## Chapter 9 — DACS-4: Settle
-**Stage:** Settle (4th of 5). **Status:** Draft v0.2. **Depends on:** SR-2 (required), SR-5 (required for cross-chain rails only); composes with AP2, x402, ERC-20, SPL, HTLC contracts, and substrate-native bridges (Liquidity Tanks on Demos). **Used by:** DACS-5 (settlement evidence in session bundle).
+**Stage:** Settle (4th of 5). **Status:** Draft (part of DACS v0.1). **Depends on:** SR-2 (required), SR-5 (required for cross-chain rails only); composes with AP2, x402, ERC-20, SPL, HTLC contracts, and substrate-native bridges (Liquidity Tanks on Demos). **Used by:** DACS-5 (settlement evidence in session bundle).
 
 ### 9.1 Abstract
 
@@ -964,7 +964,7 @@ A single-table summary of phase types, their parameters (from listing PhaseStep)
 | deliver-attested-payload | none (driven by listing.offering.deliverable) | n/a + attestationRef |
 
 ## Chapter 10 — DACS-5: Verify
-**Stage:** Verify (5th of 5). **Status:** Draft v0.2. **Depends on:** SR-1 (preferred for cross-substrate primary-claim keying), SR-2 (required for bundle anchoring); composes with ERC-8004 reputation registry as an OPTIONAL publication surface. **Used by:** all subsequent DACS-1 sessions (reputation lookups), external auditors and regulators.
+**Stage:** Verify (5th of 5). **Status:** Draft (part of DACS v0.1). **Depends on:** SR-1 (preferred for cross-substrate primary-claim keying), SR-2 (required for bundle anchoring); composes with ERC-8004 reputation registry as an OPTIONAL publication surface. **Used by:** all subsequent DACS-1 sessions (reputation lookups), external auditors and regulators.
 
 ### 10.1 Abstract
 
@@ -1112,7 +1112,7 @@ Implementations consuming the registries MUST disclose to their users which sign
 
 #### 11.1.2 Versioning
 
-Each per-stage standard (DACS-1 through DACS-5) versions independently. Major versions break compatibility; minor versions add capabilities while preserving forward-readable shapes. The introduction paper version (currently 0.8) is the conceptual anchor; per-stage specs cite the paper version they are coherent with. v1 freezes the registries (claim schemes in DACS-1, methods/recipes in DACS-2, patterns in DACS-3, rails in DACS-4); additions happen via minor-version registry updates released by the current steward.
+DACS uses a single document-level version. The entire standard — all five per-stage standards, front-matter substrate-binding, threat model, glossary, conformance plan — versions together. This document is **DACS v0.1**, the first publicly released version. Major versions (v1, v2, …) break compatibility; minor versions (v0.2, v0.3, …) add capabilities while preserving forward-readable shapes. v0.1 freezes the registries (claim schemes in DACS-1, methods/recipes in DACS-2, patterns in DACS-3, rails in DACS-4); additions happen via minor-version registry updates released by the current steward. v1 is the version at which the standard is considered ready for unsupervised production use.
 
 #### 11.1.3 Conformance philosophy
 
