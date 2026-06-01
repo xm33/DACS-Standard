@@ -2084,7 +2084,7 @@ A DACS-1 listing’s pipeline declares which negotiation pattern is used. Each P
 | Channel implementation | CH-1 through CH-5; message envelope; failure detection |
 | negotiate-fixed-price | §8.4.1 procedure; signature collection; SR-2 anchoring |
 | negotiate-rfq | §8.4.2 procedure; RFQ-1 through RFQ-4; channel turn timeouts |
-| negotiate-sealed-envelope | §8.4.3 procedure; SE-1 through SE-5; deterministic selection |
+| negotiate-sealed-envelope | §8.4.3 procedure; SE-1 through SE-6; deterministic selection; rule-ref content-hash binding |
 | commit-agreement | CA-1 through CA-4; signature and conformance validation |
 | Listing publisher | PS-1 through PS-3 |
 | Substrate without SR-4 | MUST support negotiate-fixed-price; MUST refuse negotiate-rfq and negotiate-sealed-envelope with a clear substrate-capability-missing error |
