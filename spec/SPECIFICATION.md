@@ -1164,6 +1164,20 @@ type Recipe = {
 
     supersedes?: number
 
+    anchoring: "in-code" | "single-signer" | "multisig"   // progressive-anchoring phase (PA-1/PA-2/PA-3); see §7.4.4
+
+    emergency?: {                              // present iff this is an emergency revision; see §7.4.4
+
+      isEmergency: true
+
+      failureObservation: string               // URL of authority change / observed response-format diff
+
+    }
+
+    deprecated?: boolean                       // true => MUST NOT start new sessions for required claims; see §7.4.4
+
+    deprecationReason?: string                 // required when deprecated is true
+
   }
 
   signature: RecipeSignature                  // steward's signature (see §7.4.4)
@@ -2263,7 +2277,15 @@ type RailDefinition = {
 
   availability: RailAvailability       // operational status (see §9.4.5)
 
-  governance: { proposedBy: ClaimReference; acceptedAt: number; supersedes?: number }
+  governance: {
+    proposedBy: ClaimReference;
+    acceptedAt: number;
+    supersedes?: number;
+    anchoring: "in-code" | "single-signer" | "multisig";   // progressive-anchoring phase; see §9.4.4 (line 2340) and §7.4.4
+    emergency?: { isEmergency: true; failureObservation: string };   // present iff this is an emergency revision
+    deprecated?: boolean;
+    deprecationReason?: string                              // required when deprecated is true
+  }
 
   signature: RailSignature             // steward's signature (see §9.4.3)
 
