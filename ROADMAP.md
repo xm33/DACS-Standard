@@ -38,6 +38,7 @@ The roadmap has two parts:
 | Streaming / continuous-flow rails | Anticipated | Per-second / per-byte settlement; out of scope for v0.1 (§11.2.4). |
 | `SettlementFinality` field on SettlementEvidence | Candidate | Surface the chain-specific confirmation / finality model into the evidence record so audit tools can read it without re-deriving. Foundation already exists (PC-4 ties `ok:true` to the chain's finality semantics; rails carry `finalityBlocks` / `commitmentLevel`); this is the surfacing field. |
 | `FeeSchedule` disclosure in AgreementDocument | Candidate | Declared/negotiated fee disclosure for regulated contexts (EU MiCA, US MSB). Optional, non-breaking. Design-issue first. |
+| HTLC anti-free-option mechanism (#24, HTLC-10) | Candidate; design-issue first | Bonded premium / timeout fee / stake to compensate the payee for the inherent free option the preimage-holding payer holds in a basic HTLC swap (HTLC-10 discloses but does not remedy it). v0.1 steers option-sensitive flows to pay-cross-chain-liquidity-tank or a stake instead. |
 
 ## Identity & vetting (DACS-1 / DACS-2)
 
