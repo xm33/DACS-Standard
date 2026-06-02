@@ -162,7 +162,8 @@ async function vet(bundle: Bundle, listing: Listing, jobId: string) {
     const recipeBlob = await demos.storage.read(recipeAddr);               // SR-2
     const recipe = JSON.parse(recipeBlob.value);
     verifyRecipeSignature(recipe);                                          // steward's signature
-    assert(recipe.recipeVersion >= listing.pinnedRecipeVersion[claim.scheme]);
+    assert(matchedClaimRequirement.recipeVersion === undefined
+           || recipe.recipeVersion === matchedClaimRequirement.recipeVersion);   // §7.4.1: exact recipe pin per ClaimRequirement (§6.3.3), else latest-at-session-start
 
     if (recipe.method === "consensus-backed-proxy") {
       results.push(await vetViaDAHR(demos, claim, recipe, jobId));
@@ -260,7 +261,7 @@ async function vetViaDAHR(demos: Demos, claim: Claim, recipe: Recipe, jobId: str
 Notes:
 - **The "hash triggers an operation" answer is in `dahr.startProxy(...)`.** Validators fetch, validators co-sign the anchoring tx asserting `(url, time, bodyHash)`. The body is delivered to the caller inline; the anchoring tx is what survives. A later consumer holding the VerifyResult can either trust the anchored hash or re-fetch and re-verify against the hash.
 - **"How, without private info?"** Public-API endpoint. DAHR is for attesting *public* data fetches. Anything credential-bound goes through other DACS-2 methods (`verifiable-credential` for VC issuance flows, `oauth-attested` for OAuth-scoped fetches handled by buyer-side code without validator involvement, `zktls` when underlying data is private and a TLSNotary proof is appropriate).
-- **Recipe pinning.** `listing.pinnedRecipeVersion[scheme]` is pinned at session start. If the steward ships a new recipe mid-session (e.g., GLEIF moved their endpoint), the session continues against the pinned version. New sessions start against the latest.
+- **Recipe pinning.** A `ClaimRequirement.recipeVersion` (§6.3.3, §7.4.1) pins an exact DACS-2 recipe version per claim at session start. If the steward ships a new recipe mid-session (e.g., GLEIF moved their endpoint), the session continues against the pinned version. New sessions start against the latest (when no pin is set).
 
 ---
 

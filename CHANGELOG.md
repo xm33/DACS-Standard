@@ -22,6 +22,18 @@ Defect-triage and follow-on hardening on top of v0.1 (steward-merged via the iss
 - **Canonical-form rule family CF-1..CF-4** (§7.2, §6.3.1, §6.3.4) — CF-1 global NFC pre-canonicalisation of all signed/hashed string values; CF-2 ClaimReference canonical byte form (scheme lowercased before hash/sign/compare, identifier NFC, parameters sorted + uppercase-hex percent-encoded); CF-3 ClaimReference canonical identity = (scheme, identifier) only, parameters excluded from reputation keying; CF-4 logical-address delimiter encoding so the `dacsN:` logical address is reversibly parseable. Closes #7, #42, #54.
 - **SIG-5 preserve-unknown** signature verification + **`version_tag` = major-version** binding (§7.7), making §11.1.2 forward-readable shapes hold for signed artifacts. Conformance vectors for CF-1..CF-4 / CD-1 / SIG-5 added to §14.6. Closes #74.
 - **Normative session-state transition table** (§10.3.1) — rules ST-1..ST-7 (forward-only, abort entry from any `*-pending` framed as a party's right, rate branch, rate-non-fatal with no `rate-failed` state, terminal-state set + `endedAt`, substrate pause/resume) plus a state→bundle-`outcome` mapping resolving the `transient`/`settlement-atomicity` buckets. Closes #41, #80, #81, #91, #93, #97.
+- **`rfqInitiator` negotiate-rfq phase parameter** (§6, §8.4.2) — `'buyer' | 'seller'`, default `'buyer'`, defining who sends the first RFQ offer; the prose that called it a listing field is corrected. Closes #20.
+- **`ClaimRequirement.recipeVersion` pin** (§6.3.3, §7.4.1) — per-claim exact DACS-2 recipe-version pin (symmetric with the rail-side `railVersion`), making the §7.4.1 "pinned recipe" branch reachable and restoring the mid-session-revision protection. `docs/flow-trace.md` reconciled. Closes #82.
+- **Rating bounds — rules RT-1 / RT-2** (§10.6.1, §10.5.1, §10.8, §14.5) — producer MUST reject a RatingRecord whose `value` is not an integer in [1,5] or whose `freeText` exceeds 1000 chars (RT-1); deriver MUST exclude non-conforming records before aggregation (RT-2), closing the metric-poisoning gap where a self-signed `value: 1e9` would inflate the average. Closes #84.
+
+### Changed
+
+- **`RatingRecord.dimensions` declared opaque pass-through** (§10.6.1) — not interpreted or aggregated by DACS-5 derivation, no protocol semantics, unconstrained keys/ranges; consumers MUST NOT rely on it for conformance decisions. A canonical dimension namespace is a roadmap candidate. Closes #96.
+- **`cancellationPolicy` declared informational-only in v0.1** (§6.3.4 listing terms) — no enforced `cancelled` state/outcome; advertised policies are not binding, reputation-neutral exits, and the §10.3.1 abort semantics govern. A first-class `cancelled` outcome is a roadmap candidate. Closes #92.
+
+### Removed
+
+- **`membership-change` reserved out of v0.1** (§8.3.1 CH-1, §8.3.3 `ChannelMessage.type`) — channel membership is fixed for the channel's lifetime in v0.1; the undefined `membership-change` type and `admissionPolicy` are removed from the closed enum and reserved for a future version (dynamic membership is a roadmap candidate). Closes #21.
 
 ### Fixed
 

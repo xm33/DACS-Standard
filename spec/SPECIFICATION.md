@@ -491,6 +491,8 @@ type ClaimRequirement = {
 
   maxAge?: number                      // seconds; overrides recipe default
 
+  recipeVersion?: number               // pin a specific DACS-2 recipe version (§7.4.1); else latest-at-session-start
+
   parameters?: Record<string, unknown> // scheme-specific
 
 }
@@ -659,14 +661,18 @@ type ListingTerms = {
 
   deadlineSecAfterCommit?: number
 
-  cancellationPolicy?: "none" | "pre-commit" | "with-fee"
+  cancellationPolicy?: "none" | "pre-commit" | "with-fee"   // v0.1: informational only — see note below
 
   retentionYears?: number
 
   transcriptDisclosurePolicy?: "none" | "encrypted-anchored-recommended" | "encrypted-anchored-required"
 
 }
+```
 
+**`cancellationPolicy` is informational-only in v0.1.** The field MAY be advertised, but v0.1 gives it no enforced representation: there is no `cancelled` SessionState or AttestationBundle `outcome`, and a session that ends before completion records `aborted-by-self` / `aborted-by-other` per §10.3.1 regardless of any advertised policy. Counterparties MUST NOT treat an advertised `pre-commit` / `with-fee` policy as a binding, reputation-neutral exit in v0.1; the §10.3.1 abort semantics (and their §10.5 reputation treatment) govern. A first-class, reputation-neutral `cancelled` outcome — honouring a pre-agreed cancellation without it reading as a fault — is a roadmap candidate (it composes with the ST-3 "withdrawal is a right" framing).
+
+```
 type ListingSignature = {
 
   algorithm: "ed25519" | "ecdsa-secp256k1" | "sr1-aggregate"
@@ -715,7 +721,7 @@ type PhaseType =
   | "rate"
 ```
 
-Per-kind parameter shapes are normative in the owning chapter: vet-credentials — no parameters; negotiate-fixed-price — no parameters; negotiate-rfq — {maxTurns, timeoutSec, channelSubnet?} per chapter 8; negotiate-sealed-envelope — {commitDeadline, revealWindow, selectionRule, channelSubnet?} per chapter 8; commit-agreement — no parameters; pay-*— {rail: string} (railId) per chapter 9; deliver-* — no parameters (details come from the listing’s DeliverableSpec); rate — optional {required?: boolean} per chapter 10.
+Per-kind parameter shapes are normative in the owning chapter: vet-credentials — no parameters; negotiate-fixed-price — no parameters; negotiate-rfq — {maxTurns, timeoutSec, channelSubnet?, rfqInitiator?} per chapter 8; negotiate-sealed-envelope — {commitDeadline, revealWindow, selectionRule, channelSubnet?} per chapter 8; commit-agreement — no parameters; pay-*— {rail: string} (railId) per chapter 9; deliver-* — no parameters (details come from the listing’s DeliverableSpec); rate — optional {required?: boolean} per chapter 10.
 **Canonical serialisation and signature**
 A listing’s canonical form is the RFC 8785 JCS serialisation with the signature field omitted. The listing hash is sha256(canonical_form), hex-encoded. The signature.value is computed over the domain-separated payload per chapter 7§7.7:
 signed_bytes := "dacs-listing:v1:" || listing_hash
@@ -1326,7 +1332,7 @@ The v0.1 registry contains one recipe per scheme registered in chapter 6. Each r
 #### 7.4.3 Recipe authoring and resolution
 
 A conforming recipe author MUST: (RA-1) sign the recipe with the registry steward’s signing key over the domain-separated payload "dacs-recipe:v1:" || recipe_hash per chapter 7§7.7; (RA-2) anchor the recipe via SR-2 at the canonical address; (RA-3) specify recipeVersion as monotonically increasing per scheme; (RA-4) specify supersedes when replacing a prior recipe for the same scheme; (RA-5) provide at least one alternative method only if the scheme’s underlying authority supports multiple equivalent attestation paths.
-A verifier MUST resolve a recipe by: reading the recipe-registry index from dacs2:registry:v0.1; looking up the entry for the claim’s scheme; fetching the recipe at the indicated anchor and verifying its content hash and domain-separated signature; if a listing pins a specific recipeVersion, MUST use that version, otherwise MUST use the latest at session start, pinned into the session.
+A verifier MUST resolve a recipe by: reading the recipe-registry index from dacs2:registry:v0.1; looking up the entry for the claim’s scheme; fetching the recipe at the indicated anchor and verifying its content hash and domain-separated signature; if the matched `ClaimRequirement` pins a specific `recipeVersion` (§6.3.3), MUST use that version, otherwise MUST use the latest at session start, pinned into the session. This mirrors the rail-side `railVersion` pin (§9.3) and is the mechanism that protects an in-flight session from a steward shipping a recipe revision mid-session.
 
 #### 7.4.4 Recipe-track lifecycle and current steward
 
@@ -1712,7 +1718,7 @@ A negotiation channel is a coordination surface with the following properties.
 
 #### 8.3.1 Required properties
 
-(CH-1) **Identity-keyed membership.** The channel’s member set is a list of ClaimReferences. Each member’s primary claim MUST appear in their verified DACS-1 bundle. Membership changes MUST be signed by an existing member (per the channel’s admission policy) and MUST be observable to all current members.
+(CH-1) **Identity-keyed membership.** The channel’s member set is a list of ClaimReferences, **fixed for the channel's lifetime in v0.1**. Each member’s primary claim MUST appear in their verified DACS-1 bundle. The member set is established by the §8.3.2 binding-proof flow before negotiation begins and MUST NOT change mid-channel. Dynamic membership (mid-negotiation add/remove governed by an admission policy) is reserved for a future version: the `membership-change` message type and an `admissionPolicy` schema are deliberately **not** defined in v0.1, and `membership-change` is correspondingly absent from the v0.1 `ChannelMessage.type` set.
 (CH-2) **Confidentiality.** Non-members MUST NOT be able to read channel contents. The public chain MUST see only commitments (envelope commitments, agreement hash) and never raw offer/counter/reveal payloads.
 (CH-3) **Authenticity.** Every message in the channel MUST be signed by its author’s primary key (the key associated with the author’s primary claim). Verifiers MUST be able to validate signatures using the same keys used in DACS-2 verification.
 (CH-4) **Liveness.** The channel MUST deliver messages to all members within a bounded delay. Members MUST be able to detect channel-level failure (partition, censorship by the channel operator) and abort.
@@ -1740,7 +1746,7 @@ type ChannelMessage = {
 
        | "sealed-envelope-commit" | "sealed-envelope-reveal"
 
-       | "abort" | "membership-change"
+       | "abort"
 
   body: unknown                        // type-specific (defined per pattern)
 
@@ -1845,6 +1851,8 @@ type NegotiateRfqInput = {
 
     channelSubnet?: string             // SR-4 channel id; substrate-specific
 
+    rfqInitiator?: "buyer" | "seller"  // who sends the first offer; default "buyer"
+
   }
 
   sessionContext: SessionContext
@@ -1872,7 +1880,7 @@ type NegotiateRfqOutput = PhaseHandlerResult & {
 }
 ```
 
-**Procedure.** The orchestrator (driving the buyer-side flow) MUST: (1) establish an SR-4 channel between buyerBundle.presentedBy and sellerBundle.presentedBy; (2) send an initial offer — buyer (or seller, depending on listing’s rfqInitiator field) sends a turn of type offer with proposed terms; (3) iterate — each side MAY respond with counter, accept, or reject; iteration continues until accept is received (proceed), reject is received (terminate; counterparty class), maxTurns is reached without accept (terminate; counterparty class), or timeoutSec elapses without a response (terminate; counterparty or substrate class); (4) construct the AgreementDocument with derivedFromPattern: "rfq" and the agreed terms, sign and send as a final message; (5) collect co-signatures from all parties; (6) anchor the agreement via SR-2; (7) optionally, if all parties consent, anchor the encrypted transcript via SR-2 with a channelTranscriptRef. Consent MUST be explicit; default is no transcript anchoring.
+**Procedure.** The orchestrator (driving the buyer-side flow) MUST: (1) establish an SR-4 channel between buyerBundle.presentedBy and sellerBundle.presentedBy; (2) send an initial offer — buyer (or seller, per the negotiate-rfq `rfqInitiator` phase parameter; default `buyer`) sends a turn of type offer with proposed terms; (3) iterate — each side MAY respond with counter, accept, or reject; iteration continues until accept is received (proceed), reject is received (terminate; counterparty class), maxTurns is reached without accept (terminate; counterparty class), or timeoutSec elapses without a response (terminate; counterparty or substrate class); (4) construct the AgreementDocument with derivedFromPattern: "rfq" and the agreed terms, sign and send as a final message; (5) collect co-signatures from all parties; (6) anchor the agreement via SR-2; (7) optionally, if all parties consent, anchor the encrypted transcript via SR-2 with a channelTranscriptRef. Consent MUST be explicit; default is no transcript anchoring.
 **Conformance.** (RFQ-1) maxTurns MUST be ≥ 2. (RFQ-2) Each turn MUST conform to the channel message envelope. (RFQ-3) Final terms MUST conform to the listing’s pricing band — counters proposing terms outside the band MUST be rejected client-side; signed agreements with out-of-band terms MUST be rejected by commit-agreement. (RFQ-4) Implementations MUST enforce the turn timeout; missed-timeout abandonment MUST be treated as channel failure. **Substrate:** SR-2 + SR-4.
 
 #### 8.4.3 negotiate-sealed-envelope
@@ -3127,6 +3135,8 @@ derive(party, bundles, windowStart, windowEnd):
 
       if r.jobId != b.jobId: continue                              // not this session
 
+      if not is_integer(r.value) or r.value < 1 or r.value > 5: continue   // RT-2: exclude out-of-range rating (§10.6.1)
+
       if r.rater not in {p.primaryClaim for p in b.parties}: continue   // rater was not a party here
 
       if r.rater == party: continue                                // no self-rating toward one's own score
@@ -3206,6 +3216,8 @@ type RatingRecord = {
 
 rate is OPTIONAL in a pipeline. When present, the phase MUST: run after all settle-* phases complete with ok: true; produce one RatingRecord per direction (buyer→seller, seller→buyer); sign each RatingRecord over the domain-separated payload "dacs-rating:v1:" || sha256(canonical_JCS(record_without_signature)) per chapter 7§7.7; anchor each RatingRecord via SR-2 at dacs5:rating:{jobId}:{rater} (where {rater} is the RatingRecord.rater ClaimReference rendered per the §6.3.4 logical-address escaping rule for colon-containing claim references); include both ratingRefs in the bundle. Sellers and buyers MAY decline to rate; absence of a rating does not block bundle production. The pipeline step parameters MAY specify { required: true | false } per side.
 
+**Rating bounds & dimensions (rules RT-1, RT-2).** (RT-1) A rate-phase producer MUST reject — and MUST NOT anchor — a RatingRecord whose `value` is not an integer in the inclusive range [1,5], or whose `freeText` exceeds 1000 characters. (RT-2) A reputation deriver MUST exclude (not clamp) any RatingRecord failing RT-1 from aggregation, so a malformed or hostile self-signed rating cannot enter `averageBuyerRating` / `averageSellerRating` even if a producer skips RT-1. The optional `dimensions` field is **opaque pass-through metadata**: DACS-5 reputation derivation does not interpret or aggregate it, it carries no protocol semantics, its keys and value ranges are unconstrained, and consumers MUST NOT rely on it for any conformance-bearing decision. (A canonical dimension namespace with per-dimension reputation is a roadmap candidate.)
+
 ### 10.7 ERC-8004 publication surface
 
 DACS-5 bundles can OPTIONALLY be reflected to the Ethereum ERC-8004 reputation / validation registries for EVM-side consumers.
@@ -3227,7 +3239,7 @@ EVM-side consumers MAY read ERC-8004 entries as a discovery surface for DACS-5 b
 | Bundle producer | Sign per §10.4.1; anchor per §10.4.2; include all required references per §10.4.3 |
 | Bundle consumer | Recompute canonical hash; verify domain-separated signatures; dereference and validate every contained AttestationRef |
 | Reputation deriver | Apply algorithm in §10.5.1 verbatim; partition by primary claim; treat failed-substrate per the denominator rule; return null for zero-denominator metrics |
-| Rate phase handler | One RatingRecord per direction; anchor each; include in bundle |
+| Rate phase handler | One RatingRecord per direction; reject out-of-range `value` (non-integer or ∉[1,5]) / over-length `freeText` before anchoring (RT-1); anchor each; include in bundle |
 | ERC-8004 publisher (optional) | §10.7.1 mapping; rate-limit writes; sign with token-owner key |
 
 ### 10.9 Rationale
@@ -3543,7 +3555,7 @@ This chapter sketches the test categories an implementer should cover to claim c
 - **Bundle consumption.** Two-sided lookup; one-sided-bundle → aborted-by-self classification; divergent-bundles → disputed classification.
 - **Reputation derivation.** All outcome partitions (completed / failed-perm / failed-counterparty / failed-substrate / aborted-by-self / aborted-by-other); party-fault denominator excluding failed-substrate; null vs zero metric distinction; rating aggregation via ratingRefs fetch.
 - **Per-primary-claim keying.** Reputation computed against the bundle party's primaryClaim (sourced from bundle.presentedBy); no inheritance across tiers.
-- **Rate phase.** Run-after-settle ordering; one-record-per-direction; signature with rating domain separator; bundle-inclusion.
+- **Rate phase.** Run-after-settle ordering; one-record-per-direction; signature with rating domain separator; bundle-inclusion; RT-1 producer-reject of out-of-range `value` (non-integer or ∉[1,5]) / over-length `freeText`; RT-2 deriver-exclude of a non-conforming self-signed rating from the average; `dimensions` treated as opaque (not aggregated).
 - **ERC-8004 publication (optional).** Token-owner-signed entry; bundle-anchor pointer correctness; rate-limit enforcement.
 
 ### 14.6 Universal signature scheme & canonical form (SIG-1..SIG-5, CF-1..CF-4, CD-1)

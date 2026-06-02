@@ -60,6 +60,7 @@ The roadmap has two parts:
 | `negotiate-multi-quote` | Anticipated | First-class 1-to-N RFQ; today approximated via `negotiate-sealed-envelope` (§11.2.3). |
 | L2PS channel key rotation / forward secrecy | Anticipated | Rekeying, session-key expiry, and forward-secrecy requirements for long-lived (hours/days) negotiation channels. Lands with the SR-4 ergonomics work. |
 | `PriceAnchor` in AgreementDocument | Candidate | Optional DAHR-attested price snapshot both parties sign against, anchoring an agreement to a verifiable market reference (regulated/financial use). Optional, non-breaking (§8.5). |
+| Dynamic channel membership (#21) | Candidate; design-issue first | Mid-negotiation add/remove of channel members with a normative `admissionPolicy` schema and a `membership-change` message body. v0.1 fixes membership for the channel's lifetime (CH-1) and reserves `membership-change`; reopening it needs an admission-policy + verifier-validation design (and a real use case beyond the three v0.1 negotiate patterns). |
 
 ## Verify & accountability (DACS-5)
 
@@ -68,6 +69,8 @@ The roadmap has two parts:
 | DACS-X (dispute / execution-verification) | Anticipated; prototype in progress | Dispute initiation, arbitrator credentialing via DACS-1/2, named-arbitrator transcript disclosure, superseding outcome bundles (§11.2.1). The accountability layer — makes the session record adjudicable; it does not hide session content. |
 | DACS-5 → ERC-8004 cross-claim hint | Candidate | Optional bridge for the primary-claim (DACS-5) vs token (ERC-8004) reputation-keying divergence (§10.7). For v0.1 the divergence stands and the §10.7 fetch-the-bundle requirement is the mitigation. |
 | `suspiciousPatternFlags` on ReputationRecord + min-bundleCount gating advice (#101) | Candidate; design-issue first | Optional behavioural-Sybil signal for low-tier selectors (e.g. single-counterparty clustering, zero-variance outcomes). Flags themselves are fine as an **open vocabulary**; the normative-threshold and min-`bundleCount` gating parts need an RFC so the standard doesn't hard-code heuristics that belong in the implementation layer (§10.5). Pairs with `identityTier` (#103) — identity quality + behavioural quality as two orthogonal signals. |
+| First-class `cancelled` outcome (#92) | Candidate | A reputation-neutral `cancelled` / `cancelled-with-fee` SessionState + AttestationBundle outcome that honours a pre-agreed `cancellationPolicy` without it reading as an `aborted-by-self` fault. v0.1 makes `cancellationPolicy` informational-only; this would wire it through the §10.3.1 state machine and exclude it from the §10.5 fault denominator. Composes with the ST-3 "withdrawal is a right" framing. |
+| Canonical rating-`dimensions` namespace (#96) | Candidate | A registered set of per-dimension rating keys (timeliness, communication, …) with a normative value range and a per-dimension `ReputationDerivation` metric, making dimension-level reputation a comparable cross-impl signal. v0.1 treats `dimensions` as opaque pass-through (RT rules, §10.6); this promotes it to load-bearing. |
 
 ## Cross-substrate & governance
 
