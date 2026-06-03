@@ -1,0 +1,227 @@
+{
+  "dacsVersion": "0.1",
+  "status": "Proposed / non-normative contributor artifact. The steward owns all normative + namespace calls.",
+  "note": "24 GOLDEN primitive conformance vectors for DACS v0.1 §14: byte-stable AND reference-verifier-accepted, so two conformant implementations cannot disagree on them. Areas: canonicalization (§7.1), canonical decimals (§14.4), domain-separated signing (§7.7), DACS-1 identity/listing (§6.3). Inputs in vectors/golden.json; the executable reference runner lives in the reference verifier (github.com/mj-deving/dacs-verify). 18 candidate DACS-X dispute/disclosure vectors are held in the cross-impl loop on issue #99 (not in this PR).",
+  "count": 24,
+  "cases": [
+    {
+      "id": "canon-key-order",
+      "area": "canonicalize",
+      "spec": "§7.1",
+      "summary": "object members ordered by UTF-16 code unit of key",
+      "status": "golden",
+      "want": "{\"A\":3,\"a\":2,\"b\":1}"
+    },
+    {
+      "id": "canon-nested",
+      "area": "canonicalize",
+      "spec": "§7.1",
+      "summary": "nested objects sorted; array order preserved",
+      "status": "golden",
+      "want": "{\"a\":{\"x\":2,\"y\":1},\"z\":[3,1,2]}"
+    },
+    {
+      "id": "canon-escaping",
+      "area": "canonicalize",
+      "spec": "§7.1",
+      "summary": "only JCS-required escapes are applied",
+      "status": "golden",
+      "want": "\"a\\\"b\\\\c\\n\\t\""
+    },
+    {
+      "id": "canon-no-escape-slash",
+      "area": "canonicalize",
+      "spec": "§7.1",
+      "summary": "forward slash and non-ASCII are not escaped",
+      "status": "golden",
+      "want": "\"a/bé\""
+    },
+    {
+      "id": "canon-int",
+      "area": "canonicalize",
+      "spec": "§7.1",
+      "summary": "safe integers serialise as plain decimals",
+      "status": "golden",
+      "want": "9007199254740991"
+    },
+    {
+      "id": "canon-noninteger-throws",
+      "area": "canonicalize",
+      "spec": "§7.1",
+      "summary": "non-integer numbers are rejected",
+      "status": "golden",
+      "want": "throws"
+    },
+    {
+      "id": "canon-without-signature",
+      "area": "canonicalize",
+      "spec": "§7.2",
+      "summary": "the signed scope excludes the signature field",
+      "status": "golden",
+      "want": "{\"a\":1}"
+    },
+    {
+      "id": "cd1-trailing-zeros",
+      "area": "decimal",
+      "spec": "§14.4",
+      "summary": "1.50 / 01.5 / 1.500 all canonicalise to 1.5",
+      "status": "golden",
+      "want": [
+        "1.5",
+        "1.5",
+        "1.5"
+      ]
+    },
+    {
+      "id": "cd1-normal-forms",
+      "area": "decimal",
+      "spec": "§14.4",
+      "summary": "0.0 → 0 ; .5 → 0.5 ; 0.50 → 0.5",
+      "status": "golden",
+      "want": [
+        "0",
+        "0.5",
+        "0.5"
+      ]
+    },
+    {
+      "id": "cd1-reject-exponent",
+      "area": "decimal",
+      "spec": "§14.4",
+      "summary": "exponent / sign-plus / non-numeric are rejected",
+      "status": "golden",
+      "want": [
+        "throws",
+        "throws",
+        "throws"
+      ]
+    },
+    {
+      "id": "cd1-economic-equality",
+      "area": "decimal",
+      "spec": "§14.4",
+      "summary": "economically-equal amounts share a content hash; raw strings do not",
+      "status": "golden",
+      "want": {
+        "canonicalEqual": true,
+        "rawDiffers": true
+      }
+    },
+    {
+      "id": "cd1-positivity",
+      "area": "decimal",
+      "spec": "§9.3",
+      "summary": "amount MUST be > 0",
+      "status": "golden",
+      "want": "throws"
+    },
+    {
+      "id": "sig-roundtrip",
+      "area": "signing",
+      "spec": "§7.7",
+      "summary": "a dacs-1-listing signature verifies under its own separator",
+      "status": "golden",
+      "want": {
+        "ok": true,
+        "separator": "dacs-listing:v1:"
+      }
+    },
+    {
+      "id": "sig-tamper",
+      "area": "signing",
+      "spec": "§7.7",
+      "summary": "mutating the signed scope breaks verification",
+      "status": "golden",
+      "want": false
+    },
+    {
+      "id": "sig-sig2-cross-domain",
+      "area": "signing",
+      "spec": "§7.7",
+      "summary": "SIG-2: a listing signature does not verify as a bundle signature",
+      "status": "golden",
+      "want": false
+    },
+    {
+      "id": "sig-registry-closed-16",
+      "area": "signing",
+      "spec": "§7.7",
+      "summary": "the domain-separator registry is the closed set of 16",
+      "status": "golden",
+      "want": 16
+    },
+    {
+      "id": "sig-sig4-dacsx-disjoint",
+      "area": "signing",
+      "spec": "§7.7",
+      "summary": "SIG-4: DACS-X separators are dacs-x-* and disjoint from the §7.7 registry",
+      "status": "golden",
+      "want": true
+    },
+    {
+      "id": "dacs1-cci-lei-defect",
+      "area": "dacs1",
+      "spec": "§6.3.3",
+      "summary": "OBSERVATION DACS-VERIFY-0001 (adjacent issue #42): a cci-lei: claim does NOT satisfy a bare lei requirement",
+      "status": "golden",
+      "want": false
+    },
+    {
+      "id": "dacs1-cci-lei-named-matches",
+      "area": "dacs1",
+      "spec": "§6.3.1",
+      "summary": "0001 is naming-only: cci-lei: satisfies a cci-lei requirement",
+      "status": "golden",
+      "want": true
+    },
+    {
+      "id": "dacs1-tier-laundering-guard",
+      "area": "dacs1",
+      "spec": "§6.3.3",
+      "summary": "step 3b: an unverified presentedBy claim is rejected even if another verified claim satisfies the requirement",
+      "status": "golden",
+      "want": false
+    },
+    {
+      "id": "dacs1-listing-intake-ok",
+      "area": "dacs1",
+      "spec": "§6.3.4",
+      "summary": "an intake-only listing (no pay phase) may omit acceptedRails",
+      "status": "golden",
+      "want": true
+    },
+    {
+      "id": "dacs1-listing-pay-no-rails-fail",
+      "area": "dacs1",
+      "spec": "§6.3.4",
+      "summary": "step 8: a pay-* phase without acceptedRails fails",
+      "status": "golden",
+      "want": {
+        "ok": false,
+        "failedAt": "accepted-rails-conditional"
+      }
+    },
+    {
+      "id": "dacs1-listing-expired-fail",
+      "area": "dacs1",
+      "spec": "§6.3.4",
+      "summary": "an expired validity window is rejected",
+      "status": "golden",
+      "want": {
+        "ok": false,
+        "failedAt": "validity-window"
+      }
+    },
+    {
+      "id": "dacs1-native-address",
+      "area": "dacs1",
+      "spec": "§6.3.4",
+      "summary": "OBSERVATION DACS-VERIFY-0003: spec rule yields stor-<64hex> (Demos uses stor-<40hex>; verify on substrate before relying)",
+      "status": "golden",
+      "want": {
+        "shape64": true,
+        "notLen40": true
+      }
+    }
+  ]
+}
