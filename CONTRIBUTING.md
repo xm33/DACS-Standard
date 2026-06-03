@@ -49,3 +49,25 @@ then, normative changes are merged by the steward after public discussion.
 The canonical specification lives in [`spec/`](./spec/). When proposing normative
 text changes, quote the affected passage and section number in your issue or PR
 description so the change is reviewable inline.
+
+## Validation
+
+For documentation-only changes and conformance-vector edits, run the dependency-free validators:
+
+```sh
+python3 scripts/validate_conformance_vectors.py
+python3 scripts/validate-docs.py
+python3 -m unittest discover tests -v
+```
+
+The vector validator checks machine-readable examples under
+[`conformance/vectors/`](./conformance/vectors/), including happy-path,
+negative-path, IdentityBundle, and RatingRecord fixtures. The docs validator checks
+relative Markdown links and section anchors across the repo. Additive validation,
+example, and contributor-support work that does not change v0.1 conformance
+semantics is tracked in
+[`IMPLEMENTATION_READINESS.md`](./IMPLEMENTATION_READINESS.md).
+
+Issue templates under [`.github/ISSUE_TEMPLATE/`](./.github/ISSUE_TEMPLATE/) mirror
+the feedback format above for spec defects, implementation reports, and editorial
+fixes.
