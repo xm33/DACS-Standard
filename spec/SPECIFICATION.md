@@ -1345,7 +1345,7 @@ recipe.parser = {
 // Body parses as JSON and successJsonPath selects a node  -> decision = pass
 // Body parses as JSON but successJsonPath selects nothing  -> decision = fail
 // Body is not valid JSON / GLEIF returns a 5xx HTML error  -> decision = error
-// (extracted legalName/status/jurisdiction recorded in the VerifyResult)
+// (extracted legalName/status/jurisdiction recorded in the VerifyResult — these are public GLEIF registry fields, exempt from §7.5 public-anchor minimisation; a privacy-sensitive recipe MUST instead reduce private fields to predicate outcomes)
 ```
 
 #### 7.4.2 v0.1 recipe registry contents
@@ -1454,7 +1454,7 @@ type AttestationRef = {
 Canonical form is RFC 8785 JCS of the VerifyResult with the signature field omitted. The VerifyResult hash is sha256(canonical_form), hex-encoded. The signature is computed over the domain-separated payload per chapter 7§7.7:
 signed_bytes := "dacs-verifyresult:v1:" || verifyresult_hash
 **Validator-set claim references.** When AttestationRef.signer designates the producer of a consensus-backed-proxy or evm-rpc attestation, the ClaimReference MUST use the substrate-validator-set scheme: substrate-validator-set:<substrateId>:<epochOrSetId>. <substrateId> is a registered substrate identifier (v0.1 registry: "demos-mainnet", "demos-testnet"; future substrates added by the registry steward). <epochOrSetId> identifies the specific validator set that signed the attestation (Demos uses epoch numbers; substrates using rotating sets use whatever identifier the substrate exposes). Consumers MUST resolve the validator-set reference to the substrate’s published validator-set roster for that epoch and verify the attestation signature against the aggregate of those validators’ keys per the substrate’s consensus protocol. Substrates whose validator-set rosters are not publicly resolvable MUST NOT be used as the signer of a VerifyResult intended for cross-substrate consumption.
-**Public-anchor data minimisation (normative).** A VerifyResult is anchored at a publicly-derivable address (§7.3.1 CM-2) in cleartext, so its `data` field is world-readable. Therefore `data` in a publicly-anchored VerifyResult MUST carry **only predicate outcomes** — the booleans / derived facts the recipe's match needs (e.g. `{ overEighteen: true }`, `{ sanctioned: false }`, `{ kycTier: "enhanced" }`) — and MUST NOT carry raw extracted personal or financial fields (date of birth, account balance, document numbers, full authority-record contents). This is load-bearing for privacy-preserving methods: a `tlsnotary` or `zktls` recipe exists precisely to prove a fact without revealing the underlying value, and copying that value into a cleartext public anchor would defeat the method. A recipe whose `parserRules` would extract sensitive raw fields MUST reduce them to predicate outcomes before they enter an unencrypted anchored `data`. (Carrying the raw fields is only permissible under the encrypted-to-parties anchoring mode that is roadmap work — see §12.1.) The exposure of `scheme`, `identifier`, and `decision` themselves is accepted by design per §12.1.
+**Public-anchor data minimisation (normative).** A VerifyResult is anchored at a publicly-derivable address (§7.3.1 CM-2) in cleartext, so its `data` field is world-readable. Therefore `data` in a publicly-anchored VerifyResult MUST carry **only predicate outcomes** — the booleans / derived facts the recipe's match needs (e.g. `{ overEighteen: true }`, `{ sanctioned: false }`, `{ kycTier: "enhanced" }`) — and MUST NOT carry raw extracted **private** personal or financial fields (date of birth, account balance, document/government-ID numbers) or any value a privacy-preserving method was used specifically to avoid disclosing. This is load-bearing for privacy-preserving methods: a `tlsnotary` or `zktls` recipe exists precisely to prove a fact without revealing the underlying value, and copying that value into a cleartext public anchor would defeat the method. A recipe whose `parserRules` would extract such sensitive raw fields MUST reduce them to predicate outcomes before they enter an unencrypted anchored `data`. Fields that are **already public at the authority** — e.g. a public registry's published company name / jurisdiction, such as GLEIF LEI data — are NOT subject to this minimisation, since anchoring already-public registry data leaks nothing. (Carrying the raw fields is only permissible under the encrypted-to-parties anchoring mode that is roadmap work — see §12.1.) The exposure of `scheme`, `identifier`, and `decision` themselves is accepted by design per §12.1.
 
 #### 7.5.1 Decision values and semantics
 
@@ -1771,7 +1771,7 @@ A negotiation channel is a coordination surface with the following properties.
 #### 8.3.2 SR-4 realisation
 
 On Demos, L2PS (Layer-2 Privacy Subnets) is the SR-4 implementation. Channel sessions are subnets; messages stay between subnet members; the public chain stores only commitment hashes and the final agreement hash (as Storage Programs). For v0.1, subnet membership MUST be bindable to the participants’ CCI primary claims so that channel-message signatures verify against the same key that holds value on-chain, and the commit-agreement anchor’s parties match the channel members. Until CCI-keyed membership ships, implementations MAY use a binding-proof step: each participant signs an "L2PS subnet X membership = CCI Y" attestation with their CCI primary key, anchored as a Storage Program before negotiation begins.
-Other substrates MAY implement SR-4 via TEE-based confidential channels, zk-based privacy circuits, or permissioned-overlay networks bound to public-chain identity, provided they satisfy CH-1 through CH-5. DACS-3 does not standardise the wire protocol or the cryptographic envelope — those are SR-4 implementation choices — but does standardise the messages’ semantic shape.
+Other substrates MAY implement SR-4 via TEE-based confidential channels, zk-based privacy circuits, or permissioned-overlay networks bound to public-chain identity, provided they satisfy CH-1 through CH-6. DACS-3 does not standardise the wire protocol or the cryptographic envelope — those are SR-4 implementation choices — but does standardise the messages’ semantic shape.
 
 #### 8.3.3 Message envelope (substrate-independent)
 
@@ -2154,6 +2154,8 @@ Verifiers MUST recompute the canonical form, agreement hash, and domain-separate
 
 A verifier MUST validate the agreement against its referenced listing: terms.price.currency MUST equal the listing pricing currency (for negotiable pricing, bandCenter.currency; for fixed pricing, the listed price currency) — a band or equality comparison across differing currencies MUST be rejected before any amount comparison; terms.price MUST lie within the listing’s pricing band (if pricing is negotiable, within the declared negotiable.minPct / negotiable.maxPct band; if fixed, equal to the listed price); terms.rail MUST appear in listing.acceptedRails; terms.deliverable MUST conform to the listing’s offering.deliverable — specifically: terms.deliverable.deliverableType MUST equal the listing offering.deliverable kind, terms.deliverable.hash MUST equal the canonical DeliverableRef.hash of the listing’s offering.deliverable (per §9.3), and terms.deliverable.schemaUrl MUST equal the listing offering.deliverable.schemaUrl (both absent, or both present and equal); terms.deadline MUST be ≤ committedAt + listing.terms.deadlineSecAfterCommit, where committedAt is the SR-2 anchor timestamp of the commitment record (§8.6) — the same objective, substrate-determined clock SE-2 uses — NOT the self-reported `generatedAt`, which a party could backdate to widen the settle window; the listing's `validity.notAfter` (if set) MUST be ≥ committedAt — the listing MUST NOT have expired between read and commit-agreement (the §6.3.4 step-3 read-time check governs discovery; this re-check governs commit, closing the read-to-commit interval); derivedFromPattern MUST match the listing’s pipeline-declared negotiation pattern. Agreements failing any check MUST be rejected by commit-agreement.
 
+**Ordering of the `committedAt`-relative checks.** The deadline and `notAfter` checks above reference `committedAt` — the commitment record's SR-2 anchor timestamp (§8.6) — which only exists *after* the commitment is anchored (§8.6 step 5), later than the value checks at §8.6 step 3. So: the value-independent checks (currency, price-band, rail, deliverable, pattern) gate pre-anchor at step 3; the two `committedAt`-relative checks are authoritative against the anchored `committedAt` — the orchestrator performs a provisional check against the current clock before anchoring, then MUST re-evaluate them against the actual anchored `committedAt`, and any consumer/verifier reading the anchored commitment MUST likewise re-check them against `committedAt`. A commitment whose anchored `committedAt` violates either check is invalid. This keeps `committedAt` the objective anti-backdating clock (the §6.3.4 read-time check still governs discovery) without a circular dependency on an as-yet-unanchored value.
+
 ### 8.6 Commitment phase (commit-agreement)
 
 The DACS-3 phase that anchors the agreement hash on the public chain.
@@ -2190,7 +2192,7 @@ type CommitAgreementOutput = PhaseHandlerResult & {
 }
 ```
 
-**Procedure.** The orchestrator MUST: (1) compute agreementHash = sha256(canonical_JCS(agreement)) with signatures omitted; (2) verify all required signatures are present and valid; (3) validate the agreement against the listing — any validation failure MUST cause the phase to fail with class permanent; (4) construct the on-chain commitment record:
+**Procedure.** The orchestrator MUST: (1) compute agreementHash = sha256(canonical_JCS(agreement)) with signatures omitted; (2) verify all required signatures are present and valid; (3) validate the agreement against the listing per §8.5.2 — the value checks (currency/band/rail/deliverable/pattern) gate here, while the two `committedAt`-relative checks (deadline, `notAfter`) are re-evaluated against the anchored `committedAt` after step 5 per the §8.5.2 ordering note; any validation failure MUST cause the phase to fail with class permanent; (4) construct the on-chain commitment record:
 
 ```
 type CommitmentRecord = {
@@ -2256,7 +2258,7 @@ A DACS-1 listing’s pipeline declares which negotiation pattern is used. Each P
 
 | Role | Requirements |
 | --- | --- |
-| Channel implementation | CH-1 through CH-5; message envelope; failure detection |
+| Channel implementation | CH-1 through CH-6; message envelope; failure detection |
 | negotiate-fixed-price | §8.4.1 procedure; signature collection; SR-2 anchoring |
 | negotiate-rfq | §8.4.2 procedure; RFQ-1 through RFQ-4; channel turn timeouts |
 | negotiate-sealed-envelope | §8.4.3 procedure; SE-1 through SE-7; deterministic selection; rule-ref content-hash binding |
@@ -2278,7 +2280,7 @@ A DACS-1 listing’s pipeline declares which negotiation pattern is used. Each P
 
 **Institutional RFQ workflows.** A Demos-hosted RFQ run via negotiate-rfq maps to existing institutional bilateral RFQ in the same way a Bloomberg chat RFQ maps to a Symphony RFQ: same semantic shape, different transport. The transport is the SR-4 channel; the semantic shape is the DACS-3 phase. Existing RFQ desks can adopt DACS-3 RFQ without changing their negotiation logic — they wrap their existing logic as a DACS-3 phase implementation.
 **Sealed-bid government procurement.** FAR Part 14 (sealed bidding) and FAR Part 15 (contracting by negotiation) describe the US federal patterns. DACS-3’s negotiate-sealed-envelope covers FAR Part 14’s commit-then-reveal pattern with the addition of cryptographic commitment (the FAR pattern uses physical sealed envelopes). The selection-rule abstraction (lowest-price, first-acceptable, rule-ref) covers FAR’s "lowest responsive responsible bidder" and "best value" criteria. International equivalents (EU procurement directives, UK Crown Commercial Service) map similarly.
-**Off-chain negotiation systems (existing).** A negotiation system that already exists (an institutional desk’s RFQ system, a procurement portal, a B2B contract negotiation tool) MAY function as the SR-4 channel for DACS-3 purposes provided it satisfies CH-1 through CH-5. The public-chain binding (commit-agreement) and the agreement document shape are the DACS-3 additions; the negotiation transport can be existing infrastructure.
+**Off-chain negotiation systems (existing).** A negotiation system that already exists (an institutional desk’s RFQ system, a procurement portal, a B2B contract negotiation tool) MAY function as the SR-4 channel for DACS-3 purposes provided it satisfies CH-1 through CH-6. The public-chain binding (commit-agreement) and the agreement document shape are the DACS-3 additions; the negotiation transport can be existing infrastructure.
 **ERC-8183 escrow.** ERC-8183 introduces an EVM-native escrow primitive for job-style transactions. A DACS-3 agreement whose terms.rail is an EVM rail MAY reference an ERC-8183 escrow as the settlement vehicle; the rail definition (DACS-4) carries the ERC-8183 contract address.
 **Future negotiation patterns.** New patterns (auctions, multi-round delta-RFQ) are added via the DACS-3 version process. Adding a pattern requires registering its phase-handler contract, parameters, and substrate requirements.
 
@@ -2838,7 +2840,7 @@ A listing’s pipeline declares the order of payment and delivery phases. Common
 | Role | Requirements |
 | --- | --- |
 | Rail author | RD-1 through RD-5 |
-| Payment phase handler | PC-1 through PC-5; phase-specific procedure |
+| Payment phase handler | PC-1 through PC-6; phase-specific procedure |
 | Delivery phase handler | §9.6 per-kind procedure; SettlementEvidence emission |
 | Pipeline executor | PIPE-1 through PIPE-5 |
 | SettlementEvidence consumer | Canonical hash recomputation; signature validation; amendment chain following |
@@ -3308,7 +3310,7 @@ Derivation MAY be computed: (a) lazily by a querying party (over a set of bundle
 
 The §10.5.1 derivation algorithm is unscoped: it aggregates all bundles for a party within a time window regardless of the service category involved. This is useful for overall reputation but obscures domain-specific track records — a party with excellent DeFi data delivery and a poor regulatory-data track record looks identical to one that is mediocre across the board.
 
-**Category-scoped derivation** restricts the bundle set to sessions whose `AgreementDocument.offering.category` matches a given category prefix before applying the §10.5.1 algorithm:
+**Category-scoped derivation** restricts the bundle set to sessions whose service category — the `offering.category` of the **listing** the agreement was formed against (the `AgreementDocument` itself carries only `listingRef`, not the category) — matches a given category prefix before applying the §10.5.1 algorithm:
 
 ```
 derive_category_scoped(party, bundles, windowStart, windowEnd, categoryScope):
@@ -3322,9 +3324,9 @@ derive_category_scoped(party, bundles, windowStart, windowEnd, categoryScope):
   return derive(party, category_bundles, windowStart, windowEnd)
 ```
 
-`fetch_category` resolves the bundle's `agreementRef` to its `AgreementDocument` (per the §7.5.2 attestation resolution algorithm) and returns `offering.category` from the referenced listing. Bundles whose `agreementRef` cannot be resolved MUST be excluded from the category-scoped set (not treated as matching any category).
+`fetch_category` performs the full two-step resolution: (1) resolve the bundle's `agreementRef` to its `AgreementDocument` (per the §7.5.2 attestation resolution algorithm); (2) resolve that document's `listingRef` to the Listing, verifying the fetched bytes against `listingRef.contentHash`; then return the Listing's `offering.category`. Bundles whose `agreementRef` **or** `listingRef` cannot be resolved (or whose listing content-hash does not match) MUST be excluded from the category-scoped set (not treated as matching any category).
 
-**`categoryScope` matching rule.** A bundle's category matches `categoryScope` if and only if `agreement.listing.offering.category == categoryScope` OR `agreement.listing.offering.category` starts with `categoryScope + "."`. Examples: scope `"data.finance"` matches `"data.finance"`, `"data.finance.fx"`, `"data.finance.equities"` but NOT `"data.financetools"`.
+**`categoryScope` matching rule.** Let `cat = fetch_category(b.agreementRef)` (the resolved listing's `offering.category`). A bundle's category matches `categoryScope` if and only if `cat == categoryScope` OR `cat` starts with `categoryScope + "."`. Examples: scope `"data.finance"` matches `"data.finance"`, `"data.finance.fx"`, `"data.finance.equities"` but NOT `"data.financetools"`.
 
 **Use in `ReputationHint` (§6.3.6).** The `ReputationHint` attached to a `ListingSummary` is computed by applying `derive_category_scoped` with `categoryScope` equal to the listing's `offering.category` (or a prefix thereof — catalogs MAY broaden the scope when the listing category has fewer than a minimum number of qualifying bundles, provided the `reputationHint.categoryScope` field accurately reflects which scope was used). Consumers MUST read `reputationHint.categoryScope` to understand what population is reflected; the hint is only a fast-path pre-filter and MUST be verified against underlying bundles for high-stakes decisions.
 
