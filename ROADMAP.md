@@ -67,6 +67,7 @@ The roadmap has two parts:
 | `negotiate-multi-quote` | Anticipated | First-class 1-to-N RFQ; today approximated via `negotiate-sealed-envelope` (§11.2.3). |
 | L2PS channel key rotation / forward secrecy | Anticipated | Rekeying, session-key expiry, and forward-secrecy requirements for long-lived (hours/days) negotiation channels. Lands with the SR-4 ergonomics work. |
 | Dynamic channel membership (#21) | Candidate; design-issue first | Mid-negotiation add/remove of channel members with a normative `admissionPolicy` schema and a `membership-change` message body. v0.1 fixes membership for the channel's lifetime (CH-1) and reserves `membership-change`; reopening it needs an admission-policy + verifier-validation design (and a real use case beyond the three v0.1 negotiate patterns). |
+| Sealed-envelope simultaneous-reveal scheme | Candidate; design-issue first | A cryptographic commit-to-all-then-reveal-to-all discipline so the orchestrator/seller cannot learn interim revealed bids before revealWindow close. v0.1's single-orchestrator model mitigates *suppression* (bidders self-anchor reveals) and *steering* (deterministic, rule-ref-bound selection) but still trusts the orchestrator not to leak interim reveals to the seller (§8.12 orchestrator/seller reveal-manipulation residual, Round-4 review). |
 
 ## Verify & accountability (DACS-5)
 
