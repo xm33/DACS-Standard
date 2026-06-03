@@ -3072,6 +3072,8 @@ type AttestationBundle = {
 
   outcome: "completed" | "failed-perm" | "failed-counterparty" | "failed-substrate" | "aborted-by-self" | "aborted-by-other"
 
+  anchoredByRole: "buyer" | "seller" | "orchestrator"   // the role of the party that anchored THIS copy; `outcome` is recorded from this party's perspective (matches the §10.4.2 role-derived anchor address)
+
   listingRef: { listingId: string; version: number; contentHash: string }
 
   agreementRef?: AttestationRef               // present iff the session reached commit-completed or later; omitted only when terminated before commit-agreement (see §10.4.3)
@@ -3193,7 +3195,7 @@ type ReputationDerivation = {
 
   metrics: {
 
-    completionRate: number | null              // null when party_fault_denom == 0 (bundleCount == 0, or all scoped bundles failed-substrate)
+    completionRate: number | null              // null when party_fault_denom == 0 (bundleCount == 0, or all reconciled bundles failed-substrate)
 
     counterpartyDisputeRate: number | null
 
@@ -3227,21 +3229,44 @@ derive(party, bundles, windowStart, windowEnd):
 
     return ReputationDerivation with bundleCount=0, all metrics null
 
-  completed := [b for b in scoped where b.outcome == "completed"]
+  # Per-jobId reconciliation to the scored party's perspective.
+  # Two-sided anchoring (§10.4.2) means one jobId may contribute TWO bundles
+  # (buyer-anchored and seller-anchored), each recording `outcome` from ITS
+  # anchorer's perspective. Counting raw `outcome` across both copies would
+  # double-count (e.g. an abort-by-W picks up both W's "aborted-by-self" copy
+  # and V's "aborted-by-other" copy when scoring V). Collapse to one
+  # perspective-adjusted outcome per jobId:
+  reconciled := []   // one authoritative bundle per jobId
+  outcomes := []     // its outcome, perspective-adjusted to the scored party (index-aligned with reconciled)
+  for jobId, copies in (scoped grouped by b.jobId):
+    role_of_party := the role r of the BundleParty p in copies[0].parties where p.primaryClaim == party
+    self_copy := the b in copies where b.anchoredByRole == role_of_party   // the scored party's own anchored copy, if present
+    if self_copy exists:
+      reconciled.append(self_copy); outcomes.append(self_copy.outcome)     // read literally — recorded from party's own perspective
+    else:
+      cp := copies[0]                                                      // only a counterparty-anchored copy exists (e.g. §10.11 suppression)
+      reconciled.append(cp);        outcomes.append(perspective_flip(cp.outcome))   // re-interpret relative to the scored party
+  # perspective_flip (anchorer-perspective -> scored-party-perspective):
+  #   completed -> completed ; failed-substrate -> failed-substrate
+  #   aborted-by-self <-> aborted-by-other
+  #   failed-perm <-> failed-counterparty   (anchorer's own perm-failure = counterparty failed, from party's view; and vice-versa)
+  # All downstream metrics use `reconciled` (deduped bundles) / `outcomes`, never raw `scoped`.
 
-  failed_perm := [b for b in scoped where b.outcome == "failed-perm"]   // party-fault: stays in party_fault_denom but not in |completed|, so it depresses completionRate; v0.1 surfaces no separate party-fault rate metric
+  completed := [o for o in outcomes where o == "completed"]
 
-  failed_counterparty := [b for b in scoped where b.outcome == "failed-counterparty"]
+  failed_perm := [o for o in outcomes where o == "failed-perm"]   // party-fault: stays in party_fault_denom but not in |completed|, so it depresses completionRate; v0.1 surfaces no separate party-fault rate metric
 
-  failed_substrate := [b for b in scoped where b.outcome == "failed-substrate"]
+  failed_counterparty := [o for o in outcomes where o == "failed-counterparty"]
 
-  aborted_by_self := [b for b in scoped where b.outcome == "aborted-by-self"]   // party-initiated abort (§10.11): like failed_perm, depresses completionRate via the denominator; no separate metric in v0.1
+  failed_substrate := [o for o in outcomes where o == "failed-substrate"]
 
-  aborted_by_other := [b for b in scoped where b.outcome == "aborted-by-other"]
+  aborted_by_self := [o for o in outcomes where o == "aborted-by-self"]   // party-initiated abort (§10.11): like failed_perm, depresses completionRate via the denominator; no separate metric in v0.1
+
+  aborted_by_other := [o for o in outcomes where o == "aborted-by-other"]
 
   counterparty_fault_count := |aborted_by_other| + |failed_counterparty|
 
-  party_fault_denom := |scoped| − |failed_substrate|
+  party_fault_denom := |outcomes| − |failed_substrate|
 
   completionRate := |completed| / party_fault_denom   when party_fault_denom > 0 else null
 
@@ -3253,7 +3278,7 @@ derive(party, bundles, windowStart, windowEnd):
 
   ratings_targeting_party_as_buyer := []
 
-  for b in scoped:
+  for b in reconciled:
 
     for ratingRef in (b.ratingRefs or []):
 
@@ -3291,7 +3316,7 @@ derive(party, bundles, windowStart, windowEnd):
 
   volume_terms := []
 
-  for b in scoped where agreementRef present:
+  for b in reconciled where agreementRef present:
 
     agreement := fetch_and_verify_agreement(b.agreementRef)   // DACS-3 AgreementDocument
 
@@ -3299,12 +3324,14 @@ derive(party, bundles, windowStart, windowEnd):
 
   volume := groupSumByCurrency(volume_terms)
 
+  bundleCount := |reconciled|   // one per distinct jobId after two-sided reconciliation, not |scoped|
+
   return ReputationDerivation with computed metrics
 ```
 
-The `aborted-by-self` / `aborted-by-other` partitions read the bundle’s own `outcome` field directly: a bundle’s `outcome` is recorded from the perspective of the party that anchored it (§10.4.3 / §10.11), and `scoped` already restricts to bundles in which the scored `party` is that anchoring party, so `outcome == "aborted-by-self"` already means "this party aborted" and `outcome == "aborted-by-other"` already means "the counterparty aborted against this party" — no separate aborter field is needed or defined. "party_at_fault" is recorded in the bundle’s phaseSummary errorClass (counterparty implies the other party; permanent on a non-cross-chain rail with no settlement-atomicity flag and a successful pre-pay state generally implies the local party at fault). The classification rules are spelled out in the per-phase errorClass tables in chapters 7 and 9. **failed-substrate sessions** are excluded from the party-fault denominator: party_fault_denom = |scoped| − |failed_substrate|. This ensures substrate-induced failures do not damage either party’s reputation. Metrics with denominator > 0 produce numeric values; metrics with denominator == 0 (e.g., bundleCount=0, or all sessions failed-substrate) produce null — distinct from zero, signalling "no signal" rather than "zero signal". The averageBuyerRating / averageSellerRating metrics are computed by walking each bundle’s ratingRefs, fetching the referenced RatingRecord, and verifying its signature against the rater’s primary-claim key (the same key class as a BundleSignature, per §10.4.1). A RatingRecord MUST be discarded — not aggregated — unless it binds to the session being scored: the deriver MUST require r.jobId == b.jobId, r.rater MUST be one of the bundle’s parties[].primaryClaim, and r.rater MUST NOT equal the scored party (no self-rating). Only the remaining records’ values, whose target matches the scored party, are aggregated; the metric is null when no qualifying ratings exist. The observedTransactionalVolume metric is computed analogously: for each scoped bundle whose agreementRef is present, the deriver MUST resolve the AttestationRef to its AgreementDocument via fetch_and_verify_agreement(agreementRef) — fetching the anchor at agreementRef.anchor.locator, comparing the hashed bytes to agreementRef.contentHash (mismatch MUST cause that bundle to be excluded), and parsing the result as a DACS-3 AgreementDocument per the §7.5.2 attestation resolution algorithm — and then sum agreement.terms.price grouped by currency. agreementRef is an AttestationRef, not an inline AgreementDocument, so the volume step MUST dereference it before reading terms.price.
+**Two-sided reconciliation (normative).** Because two-sided anchoring (§10.4.2) can place two bundles for one jobId in the input — each recording `outcome` from *its anchorer's* perspective — the deriver MUST collapse the input to one authoritative bundle per jobId before partitioning (the `reconciled` step above), and MUST interpret `outcome` relative to the *scored* party, not the anchorer. When the scored party's own anchored copy is present (`b.anchoredByRole` == the scored party's role), `outcome` is read literally: `aborted-by-self` means "this party aborted", `aborted-by-other` means "the counterparty aborted against this party". When only a counterparty-anchored copy exists (e.g. the §10.11 bundle-suppression case, where the withdrawing party did not anchor), `outcome` is read through `perspective_flip` — `aborted-by-self ↔ aborted-by-other` and `failed-perm ↔ failed-counterparty` — so the aborter still takes the hit and the victim does not. Reading raw `outcome` across both copies (the pre-reconciliation behaviour) would double-count an abort against the victim and invert the §10.11 guarantee; the reconciliation closes that. "party_at_fault" is otherwise recorded in the bundle’s phaseSummary errorClass (counterparty implies the other party; permanent on a non-cross-chain rail with no settlement-atomicity flag and a successful pre-pay state generally implies the local party at fault); the classification rules are spelled out in the per-phase errorClass tables in chapters 7 and 9. **failed-substrate sessions** are excluded from the party-fault denominator: party_fault_denom = |outcomes| − |failed_substrate|. This ensures substrate-induced failures do not damage either party’s reputation. Metrics with denominator > 0 produce numeric values; metrics with denominator == 0 (e.g., bundleCount=0, or all sessions failed-substrate) produce null — distinct from zero, signalling "no signal" rather than "zero signal". The averageBuyerRating / averageSellerRating metrics are computed by walking each reconciled bundle’s ratingRefs, fetching the referenced RatingRecord, and verifying its signature against the rater’s primary-claim key (the same key class as a BundleSignature, per §10.4.1). A RatingRecord MUST be discarded — not aggregated — unless it binds to the session being scored: the deriver MUST require r.jobId == b.jobId, r.rater MUST be one of the bundle’s parties[].primaryClaim, and r.rater MUST NOT equal the scored party (no self-rating). Only the remaining records’ values, whose target matches the scored party, are aggregated; the metric is null when no qualifying ratings exist. The observedTransactionalVolume metric is computed analogously: for each reconciled bundle whose agreementRef is present, the deriver MUST resolve the AttestationRef to its AgreementDocument via fetch_and_verify_agreement(agreementRef) — fetching the anchor at agreementRef.anchor.locator, comparing the hashed bytes to agreementRef.contentHash (mismatch MUST cause that bundle to be excluded), and parsing the result as a DACS-3 AgreementDocument per the §7.5.2 attestation resolution algorithm — and then sum agreement.terms.price grouped by currency. agreementRef is an AttestationRef, not an inline AgreementDocument, so the volume step MUST dereference it before reading terms.price.
 
-**Rating de-duplication (normative).** Because the two-sided anchoring scheme (§10.4.2) means both parties' bundles for one jobId may both appear in `scoped`, and `ratingRefs` is an array, a naive walk would count the same rating more than once. The deriver MUST aggregate at most one rating per `(r.rater, r.jobId, r.targetRole)` tuple — last-writer-wins by `ratedAt` on a tie — so a rating contributes once per session-direction, not once per anchored bundle copy or per duplicate ref. (This is a counting rule; RT-1/RT-2 already bound each rating's value range.)
+**Rating de-duplication (normative).** Because the two-sided anchoring scheme (§10.4.2) means both parties' bundles for one jobId may both appear in the input before reconciliation, and `ratingRefs` is an array, a naive walk would count the same rating more than once. The deriver MUST aggregate at most one rating per `(r.rater, r.jobId, r.targetRole)` tuple — last-writer-wins by `ratedAt` on a tie — so a rating contributes once per session-direction, not once per anchored bundle copy or per duplicate ref. (This is a counting rule; RT-1/RT-2 already bound each rating's value range.)
 
 **`completionRate` denominator scope.** `party_fault_denom` excludes only `failed-substrate`; it retains counterparty-fault and abort sessions. This is intentional — `completionRate` measures completed-vs-attempted, not blame — but it leaves a residual griefing surface: a counterparty that repeatedly opens and aborts sessions depresses the target's `completionRate` through `aborted-by-other`. `counterpartyDisputeRate` partially offsets this (it rises in step over the same denominator), and consumers SHOULD read the two metrics together rather than `completionRate` alone. A blame-weighted completion metric is a roadmap candidate.
 
@@ -3730,7 +3757,7 @@ This chapter sketches the test categories an implementer should cover to claim c
 - **Session state transitions.** Every `(from → to)` pair MUST be in the §10.3.1 transition table and no other; illegal-pair rejection (e.g. negotiate after commit, ST-1); abort entry from any `*-pending` (ST-3); rate branch and rate-non-fatal (ST-4/ST-5); substrate-failure pause → recorded-pending resume on success and → failed-substrate on timeout (ST-7); the cross-chain asymmetric open state (ST-8) — `settle-pending → settle-asymmetric` on the HTLC-9 condition, `settle-asymmetric → settle-completed` when the `htlc-claim` lands within the `expiry_source` window, `settle-asymmetric → settle-failed` on window expiry — and that `settle-asymmetric` is non-terminal (produces no bundle until it resolves); every terminal state maps to its §10.3.1 `outcome` (ST-6 + the state→outcome table).
 - **Bundle production.** Two-sided anchoring at role-specific addresses; canonical-form equality between buyer and seller bundles in happy case; domain-separated signature ("dacs-bundle:v1:"); extended-pointer pattern for oversized bundles.
 - **Bundle consumption.** Two-sided lookup; one-sided-bundle → aborted-by-self classification; divergent-bundles → the consumer fetches both party addresses, detects canonical divergence, and applies the §10.4.3(d) per-party policy (buyer's bundle for buyer-reputation, seller's for seller-reputation). "disputed" is a **consumer-side verdict**, not an `AttestationBundle.outcome` value (the outcome enum has no `disputed` member) — the test asserts the observable §10.4.3(d) behaviour, not an enum label.
-- **Reputation derivation.** All outcome partitions (completed / failed-perm / failed-counterparty / failed-substrate / aborted-by-self / aborted-by-other); party-fault denominator excluding failed-substrate; null vs zero metric distinction; rating aggregation via ratingRefs fetch.
+- **Reputation derivation.** All outcome partitions (completed / failed-perm / failed-counterparty / failed-substrate / aborted-by-self / aborted-by-other); party-fault denominator excluding failed-substrate; null vs zero metric distinction; rating aggregation via ratingRefs fetch. **Two-sided reconciliation (§10.5.1):** when both anchored copies of one jobId are in the input, the deriver collapses to one authoritative bundle per jobId (one outcome counted, not two) — an abort-by-W scored against victim V MUST yield exactly one `aborted-by-other` for V and zero `aborted-by-self`, and when only the counterparty-anchored copy exists the `perspective_flip` (`aborted-by-self ↔ aborted-by-other`, `failed-perm ↔ failed-counterparty`) attributes the hit correctly. **Rating de-duplication (§10.5.1):** a session whose two copies share `(rater, jobId, targetRole)` rating refs contributes exactly one rating (last-writer-wins by `ratedAt`).
 - **Per-primary-claim keying.** Reputation computed against the bundle party's primaryClaim (sourced from bundle.presentedBy); no inheritance across tiers.
 - **Category-scoped derivation (§10.5.4).** Bundle set filtered to matching `categoryScope` prefix before applying §10.5.1; non-resolving agreementRefs excluded; categoryScope prefix-match rule (exact match OR `category + "."` prefix); a bundle outside the scope is excluded, not counted as a failure; `ReputationHint.categoryScope` accurately reflects the scope used.
 - **Rate phase.** Run-after-settle ordering; one-record-per-direction; signature with rating domain separator; bundle-inclusion; RT-1 producer-reject of out-of-range `value` (non-integer or ∉[1,5]) / over-length `freeText`; RT-2 deriver-exclude of a non-conforming self-signed rating from the average; `dimensions` treated as opaque (not aggregated).
