@@ -1524,6 +1524,8 @@ type CompositeVerificationRecord = {
 
   overallDecision: "pass" | "fail" | "indeterminate" | "error"
 
+  warnings?: VerificationWarning[]            // advisory only; MUST NOT affect overallDecision (WN-1)
+
   generatedAt: number
 
   signature: ComponentSignature               // signed by the verifier
@@ -1553,7 +1555,29 @@ type SupplementarySignal = {
   attestation?: AttestationRef                // required for "external" sources
 
 }
+
+type VerificationWarning = {
+
+  claimRef: ClaimReference                     // the claim (canonical scheme+identifier) that produced the warning
+
+  code: WarningCode                            // enumerated; see below
+
+  retryable: boolean                           // whether the condition is expected to be transient
+
+  suggestedRetryAfterMs?: number               // advisory per-authority hint; does NOT override recipe-level backoff/retryBudget (WN-4)
+
+}
+
+type WarningCode =
+  | "AUTHORITY_UNAVAILABLE"                     // 5xx, timeout, connection failure (maps to a VP-R1 transient error)
+  | "AUTHORITY_RATE_LIMITED"                    // 429 or equivalent (VP-R1 transient)
+  | "DNS_RESOLUTION_FAILED"                     // transient DNS failure (VP-R1 transient)
+  | "TLS_HANDSHAKE_FAILED"                      // transient TLS/certificate issue (VP-R1 transient)
+  | "RESPONSE_MALFORMED"                        // unexpected response format (VP-R1 transient, or permanent per recipe retryClass)
+  | "RETRY_EXHAUSTED"                           // all VP-R1 retry attempts spent (terminal)
 ```
+
+**Verification warnings (rules WN-1..WN-6).** The optional `warnings` array surfaces transient/retryable verification conditions encountered while producing the record — without changing the verification decision. Warnings are strictly advisory and orthogonal to the §7.7.1 aggregation: (WN-1) the presence of one or more warnings MUST NOT change `overallDecision`; (WN-2) warnings MUST NOT be used to convert a `pass` into a `fail` or vice versa; (WN-3) warnings MUST be preserved in the record even when `overallDecision` is `pass` (they document conditions a consumer may act on operationally, e.g. an authority that was rate-limited but answered on retry); (WN-4) `suggestedRetryAfterMs` is an advisory per-authority hint and does NOT override the recipe-level `backoff` (§7.4.1) or `retryBudget` (§7.6.1 VP-R1) — the recipe remains the governing retry policy and the warning only adds per-authority context; (WN-5) consumers SHOULD surface warnings to human operators when `overallDecision` is `indeterminate` (the warnings often explain *why* the answer was inconclusive); (WN-6) implementations MAY add implementation-specific `code` values but SHOULD prefer the enumerated v0.1 codes when applicable, and a consumer encountering an unknown code MUST treat it conservatively (as advisory, never as grounds to elevate or downgrade the decision — consistent with WN-1/WN-2). The codes align with the §7.6.1 retry taxonomy: the five transient codes correspond to a VP-R1 retryable `error`, and `RETRY_EXHAUSTED` records that the VP-R1 budget was spent.
 
 CCI-native reputation signals (cci-nomis, cci-ethos, cci-humanpassport) are first-class supplementary signal sources: they are read from the counterparty’s CCI without needing a separate attestation, because the underlying CCI context’s GCR routine has already validated them.
 
@@ -3791,6 +3815,9 @@ This chapter sketches the test categories an implementer should cover to claim c
 - **Recipe and rail availability (§7.4.5, §9.4.4).** Every value in the closed enum produces the conformant orchestrator/verifier behaviour: RAV-1 through RAV-4 for recipes consumer-side (no silent treatment as live; consumer surfacing; disabled/failed → error in aggregation; alternative availability not inheriting from default) and RAV-5 through RAV-7 steward-side (emergency revision on failure; availability transitions are signed/anchored revisions; availability is per-recipe-version); RAV-R1 through RAV-R5 for rails (preflight inspection; no selection of disabled/failed; rail-down-at-settlement-attempt maps to substrate errorClass; RAV-R5 availability read from the authoritative signed/anchored rail definition, not a poisonable cache).
 - **Phase contract (VPC-1..VPC-4).** Order (Vet after Identify, before Negotiate); two-sided execution; anchor-before-return; fail-or-indeterminate handling.
 - **Matching algorithm (MA-1..MA-3, §6.3.3).** required/oneOf satisfaction; primaryClaimSelector scheme match (MA-2: presentedBy scheme != selector → REJECT); presentedBy verification (MA-3: primaryClaimSelector set + presentedBy claim not verified-and-fresh, i.e. missing/failing verifiedBy OR stale per the §6.3.2 freshness gate → REJECT, even when the structural scheme matches).
+- **Verification warnings (WN-1..WN-6, §7.7).** Advisory-only warnings that never move the decision:
+  - **Vector 1 — warning coexists with `pass`.** A `CompositeVerificationRecord` with `overallDecision: "pass"` and `warnings: [{ claimRef: { scheme: "lei", identifier: "5493001KJTIIGC8Y1R12" }, code: "AUTHORITY_RATE_LIMITED", retryable: true, suggestedRetryAfterMs: 30000 }]` — the authority was rate-limited but answered on retry — remains `pass`, the warning is preserved (WN-3), and the §7.7.1 aggregation is unchanged (WN-1).
+  - **Vector 2 — warnings cannot reclassify.** A consumer receiving that `pass` record MUST NOT reclassify it as `fail` or `indeterminate` on the basis of warnings alone (WN-2); an unknown `code` is treated conservatively as advisory, never as decision-affecting (WN-6).
 
 ### 14.3 DACS-3 — Negotiate
 
