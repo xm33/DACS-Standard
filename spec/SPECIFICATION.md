@@ -467,6 +467,36 @@ A conforming bundle producer MUST: (BP-1) produce JCS-canonical serialisation fo
 A conforming bundle reader MUST: (BR-1) recompute the bundle hash from canonical form before signature check; (BR-2) reject a bundle whose presentation signature does not verify; (BR-3) reject a bundle in which a required (per listing) claim has a missing or invalid verifiedBy when verificationRequired = true; (BR-4) treat claims with unknown schemes as unverified; (BR-5) when the listing sets primaryClaimSelector, reject a bundle whose presentedBy claim is not itself verified (missing or failing verifiedBy), even when its scheme matches the selector — see the §6.3.3 match() step that enforces this, preventing tier-laundering where an unverified primary claim rides on separately-verified required claims.
 **Selective disclosure (scope note).** v0.1 provides no per-claim selective-disclosure mechanism at the bundle layer: there is no per-claim blinding, no commitment-with-open-on-demand, and no proof-of-possession-without-disclosure for a claim a listing did not require. A verifier that receives a bundle sees every claim in `claims[]`, and the `presentedBy` primary claim is always disclosed and is the cross-session correlator used for reputation and audit (§6.4 Rationale, §6.3.4). The DACS-2 zkTLS / TLSNotary methods (§7.3.3 tlsnotary, §7.3.4 zktls) protect the secret *inside* a claim's verification; they do NOT conceal *which* claims a party holds from a counterparty. The only minimisation available in v0.1 is presenter-side: a presenter MAY publish a bundle containing only the claims a given listing requires, accepting that the primary claim remains linkable across presentations. Implementers MUST NOT treat DACS-1 + a privacy-preserving DACS-2 method as an end-to-end selective-disclosure guarantee. Blinded / minimised-claim presentation is a named follow-on item (§11.2.7).
 
+
+#### 6.3.2.1 Identity tier derivation (optional, deterministic)
+
+An optional `identityTier` signal MAY be derived from an `IdentityBundle` to provide downstream systems with a summary of identity quality at creation time.
+
+**The field is never trusted as self-reported.** Conformant implementations MUST derive the tier deterministically from the verified claims present in the bundle. Any self-asserted `identityTier` value present in the bundle MUST be ignored and recomputed.
+
+**Derivation rule (normative):**
+
+Conformant readers MUST compute `identityTier` using the following priority order:
+
+1. If the `claims[]` array contains at least one **verified** claim of type `lei:`, `finra-crd:`, `sam-uei:`, or equivalent verified institutional claim, the tier is `"institutional"`.
+2. Else if the `claims[]` array contains at least one **verified** claim of type `acme:`, `tlsnotary:`, `domain:`, or equivalent verified proof on a low-tier identifier, the tier is `"verified"`.
+3. Otherwise, the tier is `"self-declared"`.
+
+Institutional claims take precedence. Only **verified** claims (those with a passing `verifiedBy` reference) count toward tier elevation.
+
+**Tier definitions:**
+
+| Value | Meaning | Example claims |
+|-------|---------|----------------|
+| `institutional` | Backed by a regulated or high-assurance entity identifier with real-world cost | verified `lei:`, `finra-crd:`, `sam-uei:` |
+| `verified` | Low-tier identity with additional cryptographic proof | `key:` + verified `tlsnotary:`, `did:` + verified `acme:` |
+| `self-declared` | Raw cryptographic identity, no external verification | plain `key:` or `did:` without additional verified claims |
+
+**Relationship to DACS-5.** `identityTier` provides a signal about identity quality at creation time. DACS-5 `suspiciousPatternFlags` (§10.5, when adopted) provides a behavioral signal after transactions begin. They are orthogonal and SHOULD remain separate fields, not a blended score.
+
+**Conformance — identity tier derivation.**
+A conforming reader that computes `identityTier` MUST: (IT-1) derive the tier from verified claims only, using the priority rule above; (IT-2) ignore any self-asserted `identityTier` value in the bundle; (IT-3) produce the same tier as any other conforming reader given the same `IdentityBundle`.
+
 #### 6.3.3 Bundle requirement schema
 
 A listing declares which bundles it will accept.
@@ -3724,6 +3754,13 @@ This chapter sketches the test categories an implementer should cover to claim c
 - **Listing publisher (LP-1..LP-4).** Sign-with-domain-separator, anchor, version monotonicity, revocation marker publication.
 - **Listing reader (LR-1..LR-3).** Validation-order halt-on-first-failure (one test per validation step), revoked-listing refusal, size-cap rejection.
 - **Discovery.** well-known parser; catalog endpoint shape; anchor cross-check from ListingSummary.
+
+- **Identity tier derivation (IT-1..IT-3).** Five test vectors confirming deterministic derivation from verified claims:
+  - **Vector 1 — Institutional (LEI).** Input: `{ "claims": [{ "type": "lei:1234567890", "verified": true }] }` → Expected: `"institutional"`.
+  - **Vector 2 — Verified (key + proof).** Input: `{ "claims": [{ "type": "key:0xabc...", "verified": true }, { "type": "tlsnotary:attestation-xyz", "verified": true }] }` → Expected: `"verified"`.
+  - **Vector 3 — Self-declared (raw key).** Input: `{ "claims": [{ "type": "key:0x123...", "verified": true }] }` → Expected: `"self-declared"`.
+  - **Vector 4 — Self-asserted value ignored.** Input: `{ "identityTier": "institutional", "claims": [{ "type": "key:0x456...", "verified": true }] }` → Expected: `"self-declared"` (self-assertion discarded, recomputed).
+  - **Vector 5 — Mixed claims, highest tier wins.** Input: `{ "claims": [{ "type": "lei:9876543210", "verified": true }, { "type": "acme:example.com", "verified": true }] }` → Expected: `"institutional"`.
 
 ### 14.2 DACS-2 — Vet
 
