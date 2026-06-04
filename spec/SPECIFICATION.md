@@ -1555,26 +1555,25 @@ Re-running vet-credentials with the same inputs MUST produce the same composite-
 
 ### 8.1 Abstract
 
-DACS-3 specifies how transacting parties arrive at agreed terms and bind themselves cryptographically to the outcome. It defines:
+DACS-3 specifies how parties arrive at agreed terms and bind themselves cryptographically to the outcome. It defines:
 
-- A **negotiation channel model** — the abstract requirements for a private coordination surface keyed to the participants’ identities, with the public chain seeing only commitments. Realised in v0.1 by SR-4; substrates without SR-4 can host only negotiate-fixed-price.
-- A **closed set of negotiation patterns** as DACS-3 phase types: negotiate-fixed-price (acceptance), negotiate-rfq (open-ended offer/counter exchange with bounded turns), negotiate-sealed-envelope (commit-then-reveal sealed-bid procurement). Each is a phase with a uniform input/output contract.
-- An **agreement document schema** — the canonical, signed JSON document the parties produce as the output of any negotiation pattern. Carries the final terms, deliverable reference, deadlines, and signatures from all parties.
-- A **commitment phase** (commit-agreement) — the DACS-3 phase that anchors the agreement hash on the public chain, producing the binding artifact every downstream stage references.
+- A **negotiation channel model** — abstract requirements for a private coordination surface keyed to participant identities, with the public chain seeing only commitments. Realised in v0.1 by SR-4; substrates without SR-4 host only negotiate-fixed-price.
+- A **closed set of negotiation patterns** as phase types: negotiate-fixed-price (acceptance), negotiate-rfq (bounded offer/counter), negotiate-sealed-envelope (commit-then-reveal sealed bid) — each with a uniform input/output contract.
+- An **agreement document schema** — the canonical signed JSON output of any pattern, carrying final terms, deliverable reference, deadlines, and all-party signatures.
+- A **commit-agreement phase** — anchors the agreement hash on the public chain, producing the binding artifact every downstream stage references.
 
-Negotiation contents stay between the participants. The public chain receives only what is needed to bind them to the outcome.
+Negotiation contents stay between participants; the chain receives only what binds them to the outcome.
 
 ### 8.2 Motivation
 
-Negotiation is the stage in which commerce most consistently breaks open standards. Identity, payment, and capability discovery can run on public infrastructure with little privacy cost for their *contents* — though the durable identities they bind remain visible at the public audit layer, an accepted accountability-over-privacy tradeoff (§12.1). Pricing, term-sheet drafts, sealed-bid submissions, and RFQ counter-offers cannot — they involve material non-public information, competitive pricing, or simply discussions whose contents would harm the participants if exposed.
-A buyer agent today can issue an RFQ to three sellers via public channels, but the public visibility of the request, the counters, and the timing telegraphs market information that institutional desks specifically pay to keep private. Sealed-bid government procurement cannot run on a public mempool. Pre-trade negotiation in regulated markets is bound by MNPI rules that public-chain visibility violates.
-DACS-3 closes this gap by separating two concerns that have historically been fused:
+Negotiation is where commerce most consistently breaks open standards. Identity, payment, and discovery can run publicly with little privacy cost to their *contents* (the durable identities they bind do stay visible at the audit layer — an accepted accountability-over-privacy tradeoff, §12.1). Pricing, term-sheet drafts, sealed bids, and RFQ counters cannot: they involve MNPI, competitive pricing, or discussions that harm participants if exposed. A public RFQ telegraphs market information institutional desks pay to keep private; sealed-bid procurement cannot run on a public mempool; regulated pre-trade negotiation is bound by MNPI rules public visibility violates.
 
-- **Negotiation content** lives in a private channel between participants. The channel’s membership is bound to the same identities that hold value on the public chain — so signatures inside the channel are equivalent to public-chain signatures — but the contents never become public.
-- **Commitment** lives on the public chain. At the end of negotiation, a single hash of the final agreement is anchored. Anyone with access to the public chain can verify that a binding agreement exists between the named parties at a known timestamp; they cannot read its contents without channel access.
+DACS-3 separates two historically-fused concerns:
 
-This separation is what makes institutional and regulated flows possible on a public-permissionless substrate. It is also what most distinguishes DACS from existing open standards: payment authorisation standards (AP2, x402), identity registries (ERC-8004), and credential attestation standards (W3C VC, zkTLS) all assume public negotiation or no negotiation. DACS-3 takes the negotiation primitive seriously.
-A third concern: not every transaction needs private negotiation. A $0.01 API micropayment with a fixed price has nothing to negotiate; the listing’s posted terms are the agreement, and "acceptance is the negotiation." DACS-3 makes this case trivial via negotiate-fixed-price, which requires only SR-2 (anchoring) and works on any substrate. The substrate-locked patterns (negotiate-rfq, negotiate-sealed-envelope) are opt-in per listing.
+- **Negotiation content** lives in a private channel whose membership is bound to the same identities that hold value on chain (so in-channel signatures equal public-chain signatures), but whose contents never become public.
+- **Commitment** lives on chain: a single hash of the final agreement is anchored, so anyone can verify a binding agreement exists between the named parties at a known time without reading its contents.
+
+This separation is what makes institutional/regulated flows possible on a public-permissionless substrate, and most distinguishes DACS from standards (AP2, x402, ERC-8004, W3C VC, zkTLS) that assume public negotiation or none. Not every transaction needs it: a fixed-price micropayment has nothing to negotiate — "acceptance is the negotiation" via negotiate-fixed-price (SR-2 only, any substrate). The substrate-locked patterns (rfq, sealed-envelope) are opt-in per listing.
 
 ### 8.3 Negotiation channel model
 
@@ -1977,21 +1976,21 @@ A DACS-1 listing’s pipeline declares which negotiation pattern is used. Each P
 
 ### 8.10 Rationale
 
-**Three patterns vs more, fewer, or open registry.** Three is the smallest set that covers the demonstrated commerce surface: micropayments and SaaS use fixed-price; institutional bilateral negotiation uses RFQ; sealed-bid procurement uses sealed-envelope. Open registries lose conformance testability. More patterns (auction-english, auction-dutch, multi-round-RFQ-with-deltas) are deferred to v2 once v0.1’s set ships with real users.
-**Closed pattern set in v0.1 vs open from day one.** The pattern set determines what a generic orchestrator must implement. A closed set lets every conforming orchestrator handle every conforming listing. An open set means listings can declare patterns no orchestrator supports — fragmentation by design.
-**Single AgreementDocument shape across patterns vs pattern-specific shapes.** The same downstream stages (Settle, Verify) consume agreements regardless of how they were negotiated. A uniform shape lets DACS-4 and DACS-5 stay pattern-agnostic. Pattern-specific data lives in additionalTerms and in optional fields (e.g., derivedFromChannel).
-**Channel transcript private by default vs anchored-with-encryption.** Anchoring transcripts by default would be expensive (transcripts can be large) and politically fraught (operators would not adopt a standard that anchors their negotiation history, even encrypted). Default-private with opt-in anchoring matches institutional practice: keep the negotiation private, anchor the binding outcome. Parties who need transcript audit (regulated flows) opt in.
-**commit-agreement as a separate phase vs implicit in the negotiation phase output.** A separate phase makes the public-chain commitment visible in the pipeline, lets the orchestrator validate signature and conformance before the agreement becomes binding, and provides a clear hook for downstream Settle/Verify. Implicit commitment hides the binding moment and complicates failure recovery.
-**SR-4 as required for private vs alternative substrate primitives.** SR-4 is an abstract capability; substrates can realise it via private subnets (Demos), TEEs (with documented trust trade-offs), permissioned channels (where appropriate), or zk-based confidential channels. DACS-3 does not pick a winner among realisations; it specifies the abstract capability and the per-pattern requirements.
-**Sealed-envelope: commit anchored, reveal in channel.** The commit hash on the public chain prevents back-dating and repudiation; the reveal stays in the channel to avoid leaking losing bids publicly. This matches government sealed-bid practice: bids are sealed in advance, revealed only to the procurement officer at opening time, and losing bid amounts are typically not disclosed.
+**Three patterns vs more/fewer/open.** Three is the smallest set covering the demonstrated surface: fixed-price (micropayments, SaaS), RFQ (institutional bilateral), sealed-envelope (sealed-bid procurement). Open registries lose conformance testability; more patterns (english/dutch auction, multi-round delta-RFQ) are deferred to v2.
+**Closed pattern set vs open.** A closed set lets every conforming orchestrator handle every conforming listing; an open set lets listings declare unsupported patterns — fragmentation by design.
+**Single AgreementDocument shape across patterns.** Settle and Verify consume agreements regardless of how negotiated, so a uniform shape keeps them pattern-agnostic; pattern-specific data lives in `additionalTerms` / optional fields.
+**Transcript private by default vs anchored-encrypted.** Default-anchoring transcripts is expensive and adoption-hostile (operators won't anchor negotiation history, even encrypted). Default-private with opt-in anchoring matches institutional practice; regulated flows opt in.
+**commit-agreement as a separate phase.** A separate phase makes the on-chain commitment visible in the pipeline, lets the orchestrator validate signature/conformance before binding, and gives Settle/Verify a clear hook; implicit commitment hides the binding moment and complicates recovery.
+**SR-4 abstract, not a fixed realisation.** Substrates may realise it via private subnets (Demos), TEEs, permissioned channels, or zk-confidential channels; DACS-3 specifies the abstract capability and per-pattern requirements, not a winner.
+**Sealed-envelope: commit anchored, reveal in channel.** The on-chain commit hash prevents back-dating/repudiation; the in-channel reveal avoids leaking losing bids — matching government sealed-bid practice.
 
 ### 8.11 Backwards compatibility
 
-**Institutional RFQ workflows.** A Demos-hosted RFQ run via negotiate-rfq maps to existing institutional bilateral RFQ in the same way a Bloomberg chat RFQ maps to a Symphony RFQ: same semantic shape, different transport. The transport is the SR-4 channel; the semantic shape is the DACS-3 phase. Existing RFQ desks can adopt DACS-3 RFQ without changing their negotiation logic — they wrap their existing logic as a DACS-3 phase implementation.
-**Sealed-bid government procurement.** FAR Part 14 (sealed bidding) and FAR Part 15 (contracting by negotiation) describe the US federal patterns. DACS-3’s negotiate-sealed-envelope covers FAR Part 14’s commit-then-reveal pattern with the addition of cryptographic commitment (the FAR pattern uses physical sealed envelopes). The selection-rule abstraction (lowest-price, first-acceptable, rule-ref) covers FAR’s "lowest responsive responsible bidder" and "best value" criteria. International equivalents (EU procurement directives, UK Crown Commercial Service) map similarly.
-**Off-chain negotiation systems (existing).** A negotiation system that already exists (an institutional desk’s RFQ system, a procurement portal, a B2B contract negotiation tool) MAY function as the SR-4 channel for DACS-3 purposes provided it satisfies CH-1 through CH-6. The public-chain binding (commit-agreement) and the agreement document shape are the DACS-3 additions; the negotiation transport can be existing infrastructure.
-**ERC-8183 escrow.** ERC-8183 introduces an EVM-native escrow primitive for job-style transactions. A DACS-3 agreement whose terms.rail is an EVM rail MAY reference an ERC-8183 escrow as the settlement vehicle; the rail definition (DACS-4) carries the ERC-8183 contract address.
-**Future negotiation patterns.** New patterns (auctions, multi-round delta-RFQ) are added via the DACS-3 version process. Adding a pattern requires registering its phase-handler contract, parameters, and substrate requirements.
+**Institutional RFQ workflows.** A negotiate-rfq run maps to existing bilateral RFQ as a Bloomberg-chat RFQ maps to a Symphony RFQ: same semantic shape, different transport (the SR-4 channel). Existing desks wrap their negotiation logic as a DACS-3 phase without changing it.
+**Sealed-bid government procurement.** negotiate-sealed-envelope covers FAR Part 14's commit-then-reveal with cryptographic commitment (vs physical envelopes); the selection-rule abstraction (lowest-price / first-acceptable / rule-ref) covers FAR's "lowest responsive responsible bidder" and "best value". EU/UK equivalents map similarly.
+**Off-chain negotiation systems.** An existing RFQ system / procurement portal / B2B negotiation tool MAY serve as the SR-4 channel provided it satisfies CH-1..CH-6; the public-chain binding and agreement shape are the only DACS-3 additions.
+**ERC-8183 escrow.** A DACS-3 agreement whose `terms.rail` is an EVM rail MAY reference an ERC-8183 escrow as the settlement vehicle; the DACS-4 rail definition carries the contract address.
+**Future patterns.** New patterns (auctions, multi-round delta-RFQ) are added via the DACS-3 version process — registering the phase-handler contract, parameters, and substrate requirements.
 
 ### 8.12 Security considerations
 
