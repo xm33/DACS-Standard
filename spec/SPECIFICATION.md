@@ -2576,21 +2576,22 @@ A single-table summary of phase types, their parameters (from listing PhaseStep)
 
 DACS-5 specifies how a completed session is anchored, signed, and converted into a reputation signal. It defines:
 
-- A **session record schema** — the live, mutable state document the orchestrator maintains while a session runs. Holds phase results, error classifications, and the running event log. Off-chain by default.
-- An **attestation bundle format** — the frozen end-of-session artifact, signed by both parties, anchored via SR-2. Bundles are the audit unit.
-- A **session-state machine** — deterministic, forward-only state transitions from `draft` to one of the terminal states (`finalised`, the `*-failed` states, `failed-substrate`, or the `aborted-by-*` states), enumerated as a normative transition table in §10.3.1.
-- A **reputation derivation algorithm** — a deterministic, per-primary-claim function from a set of bundles to a small set of headline metrics (completion rate, dispute rate, average rating, observed transactional volume).
-- An **optional rate phase** — a counterparty rating phase that produces a RatingRecord referenced from the bundle.
-- An **ERC-8004 publication surface** — the recommended mapping from DACS-5 reputation metrics to ERC-8004 reputation/validation registry entries.
+- A **session record schema** — the live, mutable state the orchestrator maintains while a session runs (phase results, error classifications, event log); off-chain by default.
+- An **attestation bundle format** — the frozen end-of-session artifact, signed by both parties and anchored via SR-2. Bundles are the audit unit.
+- A **session-state machine** — deterministic, forward-only transitions from `draft` to a terminal state (`finalised`, the `*-failed` states, `failed-substrate`, the `aborted-by-*` states), enumerated normatively in §10.3.1.
+- A **reputation derivation algorithm** — a deterministic, per-primary-claim function from a set of bundles to headline metrics (completion rate, dispute rate, average rating, observed transactional volume).
+- An **optional rate phase** — a counterparty rating producing a RatingRecord referenced from the bundle.
+- An **ERC-8004 publication surface** — the recommended mapping from DACS-5 metrics to ERC-8004 registry entries.
 
-Reputation is keyed against the **primary identity claim** of the bundle, not against a wallet, signing key, or session pubkey. This prevents low-tier reputation from laundering into high-tier presentations.
+Reputation keys against the bundle's **primary identity claim**, not a wallet, signing key, or session pubkey — preventing low-tier reputation from laundering into high-tier presentations.
 
 ### 10.2 Motivation
 
-The Verify stage answers three questions that no other stage answers: *did this transaction actually happen the way the parties say it did?* (a cryptographic, anchored audit trail anyone can inspect); *what did each party think of the other?* (a structured rating from one party about another); *how does this transaction feed into a counterparty’s future reputation?* (a deterministic update rule applied to the bundle of metrics keyed against the party’s primary claim).
-Existing open standards address none of these end-to-end. ERC-8004 specifies on-chain reputation entries but says nothing about how the underlying transactions are evidenced. Off-chain rating systems (review-style ratings on marketplaces) exist but are operator-controlled and not portable across platforms. Audit-log standards (e.g., RFC 5424 syslog, OpenTelemetry traces) handle observability but not cryptographic non-repudiation across counterparties.
-DACS-5 fills these gaps with three layered artifacts: the session record (working state, the orchestrator’s book), the attestation bundle (the closed audit unit, anchored), and the reputation derivation (the public-facing summary). Each layer is anchored, signed, and verifiable against the earlier stages’ outputs.
-A separate concern: **reputation keying**. A party that holds a $0.01 micropayment-tier signing key and accumulates a great reputation should not be able to laundered that into an institutional LEI presentation. DACS-5 keys reputation against the bundle’s primary claim, with separate accumulations per primary-claim tier. The same wallet may hold three primary claims (key:…, did:…, lei:…); each accumulates its own reputation. The DACS-5 derivation algorithm partitions by primary claim and produces tier-distinct metrics.
+The Verify stage answers three questions no other stage does: *did this transaction happen the way the parties say?* (a cryptographic, anchored audit trail anyone can inspect); *what did each party think of the other?* (a structured rating); *how does it feed future reputation?* (a deterministic update keyed against the party's primary claim).
+
+No existing standard covers these end-to-end: ERC-8004 specifies on-chain reputation entries but not how the underlying transactions are evidenced; marketplace ratings are operator-controlled and non-portable; audit-log standards (RFC 5424, OpenTelemetry) handle observability but not cross-counterparty non-repudiation.
+
+DACS-5 fills the gap with three layered, anchored, signed artifacts: the session record (working state), the attestation bundle (the closed audit unit), and the reputation derivation (the public summary). Reputation keying is deliberate: a great `key:…` micropayment-tier reputation must not launder into a fresh `lei:…` presentation, so derivation partitions by the bundle's primary claim and accumulates tier-distinct metrics. One wallet holding `key:…`, `did:…`, and `lei:…` accumulates three separate reputations; consumers MAY surface the cross-claim relationship (via SR-1) informationally, without inheritance.
 
 ### 10.3 Session record
 
@@ -3054,22 +3055,21 @@ EVM-side consumers MAY read ERC-8004 entries as a discovery surface for DACS-5 b
 
 ### 10.9 Rationale
 
-**Session record off-chain by default vs anchored.** Anchoring the live session record every state transition would dominate session economics for no audit benefit (the bundle captures what auditors need; the intermediate state is operational noise). Off-chain SessionRecord, on-chain bundle, is the right split.
-**Bundle as the unit of audit vs individual phase records.** Each phase already anchors its evidence; the bundle is the unifying envelope. Auditors verifying a session need ONE artifact to start from; from there they walk the references. Without a bundle, every consumer would have to reconstruct the session graph from disparate anchors.
-**Domain-separated bundle signature.** A bundle signature must not be confused with a listing signature, agreement signature, or any other DACS signature even when hash bytes collide. The "dacs-bundle:v1:" prefix prevents cross-protocol replay at zero cost. The bundle separator is part of the universal DACS signature scheme defined in §B.7; every DACS v0.1 artifact uses its own separator from the same registry.
-**Per-primary-claim reputation vs wallet-keyed.** Wallet-keyed reputation lets a great key:0xabc... reputation laundered into a brand-new lei:… presentation. Per-primary-claim keying prevents this. The same wallet honestly holding multiple claims accumulates separate reputations per tier; consumers can surface the cross-claim relationship (via SR-1) informationally without inheritance.
-**Substrate-failure exclusion from party-fault denominators.** If a session fails because the substrate was down, neither party did anything wrong; counting it as either party’s fault would create incentives for parties to avoid sessions during substrate strain. Excluding failed-substrate from the denominator keeps the metric honest.
-**Null metrics vs zero metrics.** A new party with bundleCount=0 has no signal, not a zero signal. Zero would imply "completed 0% of sessions" — misleading. Null forces consumers to handle "no data" deliberately rather than treating new parties as worst-rated.
-**Optional rate phase vs required.** Forcing every session to produce ratings would create rating noise (parties post 5-stars to avoid friction) and would expose parties to rating retaliation. Optional rating, with both sides able to decline, matches institutional practice and platform-marketplace norms.
-**ERC-8004 as optional publication vs required.** ERC-8004 is the dominant EVM reputation registry, but DACS-5 ships on substrates without an Ethereum-mainnet write path. Optional publication is the right scope.
-**Extended-pointer pattern for oversized bundles.** Real sessions occasionally produce bundles larger than the substrate’s storage-program cap (multi-party auctions, sessions with large attestation chains). Hard-failing such sessions would force a different audit format; the extended-pointer pattern keeps the canonical artifact at the on-chain address and ferries the rest off-chain with content-hash binding.
+**Session record off-chain by default.** Anchoring every state transition would dominate session economics for no audit benefit — the bundle captures what auditors need; intermediate state is operational noise. Off-chain SessionRecord + on-chain bundle is the right split.
+**Bundle as the audit unit vs individual phase records.** Each phase already anchors its evidence; the bundle is the unifying envelope auditors start from and walk references out of. Without it, every consumer would reconstruct the session graph from disparate anchors.
+**Domain-separated bundle signature.** The `dacs-bundle:v1:` prefix prevents confusing a bundle signature with any other DACS signature even when hash bytes collide — part of the §B.7 universal scheme.
+**Per-primary-claim reputation vs wallet-keyed.** Wallet-keying would let a strong `key:0xabc…` reputation launder into a fresh `lei:…`. Per-primary-claim keying prevents it; a wallet honestly holding multiple claims accumulates separate reputations, surfaced cross-claim (via SR-1) without inheritance.
+**Substrate-failure exclusion from party-fault denominators.** A session that fails because the substrate was down is nobody's fault; counting it would deter parties from transacting during substrate strain. Excluding `failed-substrate` keeps the metric honest.
+**Null vs zero metrics.** A new party (bundleCount=0) has no signal, not a zero signal — zero would read as "completed 0%". Null forces consumers to handle "no data" deliberately rather than treating new parties as worst-rated.
+**Optional rate phase.** Mandatory ratings create noise (friction-avoidance 5-stars) and retaliation exposure; optional, decline-able rating matches institutional and marketplace norms.
+**ERC-8004 publication optional.** It's the dominant EVM reputation registry, but DACS-5 ships on substrates with no Ethereum-mainnet write path.
+**Extended-pointer pattern for oversized bundles.** Some sessions exceed the storage-program cap (multi-party auctions, long attestation chains); the pattern keeps the canonical artifact at the on-chain address and ferries the rest off-chain with content-hash binding rather than hard-failing.
 
 ### 10.10 Backwards compatibility
 
-**ERC-8004 reputation / validation registries.** §10.7 specifies the publication surface. DACS-5 inherits ERC-8004’s read semantics for EVM consumers; ERC-8004 itself is unchanged.
-**Existing operator-marketplace ratings.** A marketplace migrating to DACS-5 can import its historical rating data as a one-time backfill of RatingRecord-equivalent entries signed by the marketplace operator. New ratings produced under DACS-5 stand alone; historical ratings stand under the marketplace’s signature and are clearly distinguishable.
-**Audit-log standards.** A consumer that wants to feed a DACS-5 bundle into an existing audit-log pipeline (RFC 5424, OpenTelemetry) can convert the bundle to those formats at read time. DACS-5 itself defines only the bundle.
-**Future DACS-X (dispute).** A future standard covering dispute resolution is anticipated. It will compose with DACS-5 by referencing bundles and producing dispute records; v0.1 of DACS-5 is forward-compatible with this addition (the bundle’s phaseSummary and outcome fields are sufficient for dispute proceedings to consume).
+**ERC-8004 registries.** §10.7 specifies the publication surface; DACS-5 inherits ERC-8004's read semantics for EVM consumers and leaves ERC-8004 unchanged.
+**Operator-marketplace ratings.** A marketplace migrating to DACS-5 MAY backfill historical ratings as operator-signed RatingRecord-equivalents; new DACS-5 ratings stand alone and are clearly distinguishable from the operator-signed history.
+**Audit-log standards.** A consumer MAY convert a DACS-5 bundle to RFC 5424 / OpenTelemetry at read time; DACS-5 defines only the bundle.
 
 ### 10.11 Security considerations
 
