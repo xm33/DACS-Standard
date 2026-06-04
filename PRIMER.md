@@ -1,6 +1,6 @@
 # DACS Primer — Demos Agent Commerce Standards
 
-*A ~5-page overview. Read this to understand DACS. The normative reference is [CORE](spec/SPECIFICATION.md) (the data model + universal rules) plus one module per stage; this primer is non-normative.*
+*A ~5-page overview. Read this to understand DACS. The normative reference is [CORE](spec/CORE.md) (the data model + universal rules) plus one module per stage; this primer is non-normative.*
 
 ---
 
@@ -106,7 +106,7 @@ One transaction; nine artifacts; each anchored and signed; the whole thing audit
 | You are… | Read |
 | --- | --- |
 | evaluating DACS / new to it | **this Primer** (you're done) |
-| implementing the shared model | **[CORE](spec/SPECIFICATION.md)** — data model, signatures, canonical form, session/phase model, substrate requirements, governance |
+| implementing the shared model | **[CORE](spec/CORE.md)** — data model, signatures, canonical form, session/phase model, substrate requirements, governance |
 | implementing one stage | CORE + that stage's module — **Identify / Vet / Negotiate / Settle / Verify** |
 | writing conformance tests | the module's Conformance index → the executable vectors in [`conformance/`](conformance/) |
 

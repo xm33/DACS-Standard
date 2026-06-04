@@ -43,6 +43,6 @@ This non-normative index helps implementers locate labelled conformance rules in
 
 - Treat it as a navigation aid only; rule wording lives in the linked spec sections.
 - Prefer rule-family tests that point at the §14 conformance plan before adding one-off checks.
-- Substrate-capability checks are indexed separately in [§14.8](../spec/SPECIFICATION.md#148-substrate-capability-tests).
+- Substrate-capability checks are indexed separately in [§14.8](../spec/CORE.md#148-substrate-capability-tests).
 - Update this index when a new labelled rule family is added to the specification.
 - Run `python3 scripts/validate_rule_ids.py` before opening a PR that edits labelled rules or this index.

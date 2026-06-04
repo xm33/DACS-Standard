@@ -8,7 +8,7 @@ dates**. DACS operates under progressive-anchoring phase PA-2 (single steward,
 KyneSys Labs); we do not commit timelines we cannot guarantee.
 
 This document is **informative**; the normative source is the
-[specification](./spec/SPECIFICATION.md). Where an item is already described in the
+[specification](./spec/CORE.md). Where an item is already described in the
 spec, the section is cited.
 
 The roadmap has two parts:

@@ -11,7 +11,7 @@ VERIFY_DACSX = ROOT / "scripts" / "verify_dacsx_dispute_pack.py"
 
 class IdentityRiskAndDacsXPackTests(unittest.TestCase):
     def test_v01_spec_does_not_absorb_future_risk_or_dispute_improvements(self):
-        text = SPEC.read_text(encoding="utf-8")
+        text = "\n".join(p.read_text(encoding="utf-8") for p in sorted((ROOT / "spec").glob("*.md")))
         self.assertNotIn('identityTier?: "institutional" | "verified" | "self-declared"', text)
         self.assertNotIn("suspiciousPatternFlags?: string[]", text)
         self.assertNotIn("DACS-X interface seam (non-normative pack)", text)
