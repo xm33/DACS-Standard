@@ -2365,7 +2365,7 @@ type PricingSpec =
 
   | { kind: "fixed"; price: PriceTerm }
 
-  | { kind: "negotiable"; bandCenter: PriceTerm; minPct: number; maxPct: number }   // minPct, maxPct: non-negative percentages, 0 ≤ minPct < 100; band = [bandCenter×(100−minPct)/100, bandCenter×(100+maxPct)/100] inclusive (§8.5.2)
+  | { kind: "negotiable"; bandCenter: PriceTerm; minPct: number; maxPct: number }   // minPct, maxPct: non-negative percentages, 0 ≤ minPct < 100; band = [bandCenter×(100−minPct)/100, bandCenter×(100+maxPct)/100] inclusive (§8.5.2). minPct < 100 keeps the lower bound positive; maxPct is intentionally NOT bounded (open-ended upside is a legitimate market form) — so the band offers NO upper price protection, and a buyer-side orchestrator SHOULD enforce its own acceptance ceiling rather than rely on the band to cap an overcharge.
 
   | { kind: "auction"; reservePrice?: PriceTerm; selectionRule: "lowest-price" | "highest-price" | string }   // reservePrice.currency MUST equal the listing currency; enforced as a floor (highest-price / first-acceptable / rule-ref) or ceiling (lowest-price), inclusive, per §8.4.3 step 5
 
