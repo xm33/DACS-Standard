@@ -1515,6 +1515,8 @@ type CompositeVerificationRecord = {
 
   overallDecision: "pass" | "fail" | "indeterminate" | "error"
 
+  warnings?: VerificationWarning[]            // advisory; MUST NOT affect overallDecision
+
   generatedAt: number
 
   signature: ComponentSignature               // signed by the verifier
@@ -1545,6 +1547,34 @@ type SupplementarySignal = {
 
 }
 ```
+
+
+**VerificationWarning schema.**
+
+```
+type VerificationWarning = {
+  claimId: string                              // identifier of the claim that produced the warning
+  code: WarningCode                            // enumerated; see below
+  retryable: boolean                           // whether the condition is expected to be transient
+  suggestedRetryAfterMs?: number               // advisory per-authority hint; does not override recipe-level backoff
+}
+
+type WarningCode =
+  | "AUTHORITY_UNAVAILABLE"                    // 5xx, timeout, connection failure (VP-R1 transient)
+  | "AUTHORITY_RATE_LIMITED"                   // 429 or equivalent (VP-R1 transient)
+  | "DNS_RESOLUTION_FAILED"                   // transient DNS failure (VP-R1 transient)
+  | "TLS_HANDSHAKE_FAILED"                    // transient TLS/certificate issue (VP-R1 transient)
+  | "RESPONSE_MALFORMED"                      // unexpected response format (VP-R1 transient or VP-R3 permanent)
+  | "RETRY_EXHAUSTED"                         // all VP-R1 retry attempts failed (terminal)
+```
+
+**Warnings normative rules.**
+(WN-1) The presence of one or more warnings MUST NOT change `overallDecision`.
+(WN-2) Warnings MUST NOT be used to convert a `pass` into `fail` or vice versa.
+(WN-3) Warnings MUST be preserved in the `CompositeVerificationRecord` even when the final `overallDecision` is `pass`.
+(WN-4) `suggestedRetryAfterMs` is an advisory per-authority hint. It does not override the recipe-level `backoff` strategy (7.4.1) or the `retryBudget` (7.6.1 VP-R1). Implementations use the recipe as the governing retry policy; the warning adds per-authority context.
+(WN-5) Consumers SHOULD surface warnings to human operators when `overallDecision` is `indeterminate`.
+(WN-6) Implementations MAY add implementation-specific warning codes but SHOULD prefer the v0.1 enumerated codes when applicable. Consumers encountering unknown codes MUST treat them conservatively.
 
 CCI-native reputation signals (cci-nomis, cci-ethos, cci-humanpassport) are first-class supplementary signal sources: they are read from the counterparty’s CCI without needing a separate attestation, because the underlying CCI context’s GCR routine has already validated them.
 
@@ -3737,6 +3767,10 @@ This chapter sketches the test categories an implementer should cover to claim c
 - **Recipe and rail availability (§7.4.5, §9.4.4).** Every value in the closed enum produces the conformant orchestrator/verifier behaviour: RAV-1 through RAV-4 for recipes consumer-side (no silent treatment as live; consumer surfacing; disabled/failed → error in aggregation; alternative availability not inheriting from default) and RAV-5 through RAV-7 steward-side (emergency revision on failure; availability transitions are signed/anchored revisions; availability is per-recipe-version); RAV-R1 through RAV-R5 for rails (preflight inspection; no selection of disabled/failed; rail-down-at-settlement-attempt maps to substrate errorClass; RAV-R5 availability read from the authoritative signed/anchored rail definition, not a poisonable cache).
 - **Phase contract (VPC-1..VPC-4).** Order (Vet after Identify, before Negotiate); two-sided execution; anchor-before-return; fail-or-indeterminate handling.
 - **Matching algorithm (MA-1..MA-3, §6.3.3).** required/oneOf satisfaction; primaryClaimSelector scheme match (MA-2: presentedBy scheme != selector → REJECT); presentedBy verification (MA-3: primaryClaimSelector set + presentedBy claim unverified, i.e. missing/failing verifiedBy → REJECT, even when the structural scheme matches).
+
+- **Warnings (WN-1..WN-6).** Advisory-only verification:
+  - **Vector 1 - Warning with pass.** Input: CompositeVerificationRecord with `overallDecision: "pass"` and `warnings: [{ "claimId": "gleif-LEI-1234567890", "code": "AUTHORITY_UNAVAILABLE", "retryable": true, "suggestedRetryAfterMs": 30000 }]`. Expected: record is `pass`; warning preserved; no change to aggregation.
+  - **Vector 2 - Warning must not change decision.** A consumer receiving a record with `overallDecision: "pass"` and warnings present MUST NOT reclassify as `fail` or `indeterminate` based on warnings alone.
 
 ### 14.3 DACS-3 — Negotiate
 
