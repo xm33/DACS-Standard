@@ -29,6 +29,13 @@ Status: `open` → `fixed`.
 | 10 | DACS-1 §6.3.2 (canonical serialisation paragraph) | SC | General canonical-form/hash rule fused with the SIWD-specific verifier re-derivation MUST | Split: general rule + a separate **SIWD bundle-binding check** block. | fixed |
 | 11 | DACS-1 §6.3.2 (BP-1..BP-4 / BR-1..BR-5 conformance) | SC | Inline `(BP-1) … (BP-4)` and `(BR-1) … (BR-5)` lists in running prose | Bullet lists, one rule per bullet, verbatim. | fixed |
 
+## Post-pass review (fresh-eyes, 2026-06-06)
+A read-only critical review of the edited DACS-1 (independent reviewer) found **two contradictions the readability pass introduced/hardened** — both fixed:
+- **C1 (critical).** The new **Claim tiers** table carried an `identityTier` column mapping `key` → `self-declared`, but the §6.3.2.1 derivation (step 2) maps a *verified* `key:` → `verified`. They are **different axes** (scheme-strength for `presentedBy` vs verification-status for `identityTier`) that SC#5 wrongly merged (a latent pre-restructure tension the table hardened into an authoritative contradiction). Fix: dropped the `identityTier` column from the tiers table; reworded the governance line + the §6.3.2.1 sentence to state the two axes distinctly (verified `key:` → `verified`).
+- **C2 (minor).** Rule CF-4 prose listed `listingId` as MUST-percent-encode, but the new CF-4 table (and worked example) treat it as fixed. `listingId` is URL-safe ASCII (§6.3.4) so carries no reserved delimiters — fixed the prose to match the table.
+
+Everything else the restructure touched verified behavior-preserving (signed-bytes bullets, BP/BR, validation list, verify+freshness, CF-4 table all sound; tables well-formed; no dropped MUSTs). Lesson: **a readability table that adds a *derived* column can encode a contradiction the source prose only had latently — always cross-check new tables against the surviving derivation rules.**
+
 ## Reviewed — correct, no change
 - **DACS-1 §6.3.1 "Parsers … SHOULD emit lowercase" then CF-2 "Scheme lowercased (MUST)".** Looked contradictory but is intentional scoping (permissive default → MUST at the hash/sign/compare boundary). CF-2 already flags the escalation. No fix; possibly a one-line inline note if it keeps tripping readers.
 
