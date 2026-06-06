@@ -49,6 +49,7 @@ A second fresh-eyes reviewer (no knowledge of C1/C2) read DACS-1 cold. **Clean o
 | # | Location | Category | Issue | Proposed fix | Status |
 |---|----------|----------|-------|--------------|--------|
 | 12 | DACS-2 §7.3.1 (method common contract, CM-1..CM-5) | SC | Inline `(CM-1) … (CM-5)` list in one running sentence — same hard-to-scan pattern as DACS-1 BP/BR | Bullet list, one CM rule per bullet; keep the CM-2 address `dacs2:{jobId}:{scheme}:{identifier}:v{recipeVersion}` + CF-4 note verbatim. | open |
+| 13 | DACS-2 §7.3.2 (verifiable-credential `Procedure`, 278w) | SC | One semicolon-chained sentence fusing: the verification step sequence + the holder-binding security rule (incl. the §6.3.2 nonce disjunction + its rationale) + the 4-way pass/fail/error/indeterminate outcome mapping + trust-model/substrate footer | Numbered **verification steps** list; pull holder-binding into its own labelled sub-block (the MUST + nonce disjunction + the replay rationale); render the outcome mapping as a small pass/fail/error/indeterminate list. Keep all MUSTs verbatim. **NB: all 8 method subsections §7.3.2–7.3.9 are "Procedure." prose of this shape — assess each in the DACS-2 sweep.** | open |
 
 ## Reviewed — correct, no change
 - **DACS-1 §6.3.1 "Parsers … SHOULD emit lowercase" then CF-2 "Scheme lowercased (MUST)".** Looked contradictory but is intentional scoping (permissive default → MUST at the hash/sign/compare boundary). CF-2 already flags the escalation. No fix; possibly a one-line inline note if it keeps tripping readers.
