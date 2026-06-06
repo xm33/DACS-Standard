@@ -44,6 +44,12 @@ A second fresh-eyes reviewer (no knowledge of C1/C2) read DACS-1 cold. **Clean o
 
 **Convergence:** round 2 found no new criticals → DACS-1 treated as clean.
 
+## DACS-2 (Vet) — finds (read-through in progress)
+
+| # | Location | Category | Issue | Proposed fix | Status |
+|---|----------|----------|-------|--------------|--------|
+| 12 | DACS-2 §7.3.1 (method common contract, CM-1..CM-5) | SC | Inline `(CM-1) … (CM-5)` list in one running sentence — same hard-to-scan pattern as DACS-1 BP/BR | Bullet list, one CM rule per bullet; keep the CM-2 address `dacs2:{jobId}:{scheme}:{identifier}:v{recipeVersion}` + CF-4 note verbatim. | open |
+
 ## Reviewed — correct, no change
 - **DACS-1 §6.3.1 "Parsers … SHOULD emit lowercase" then CF-2 "Scheme lowercased (MUST)".** Looked contradictory but is intentional scoping (permissive default → MUST at the hash/sign/compare boundary). CF-2 already flags the escalation. No fix; possibly a one-line inline note if it keeps tripping readers.
 
