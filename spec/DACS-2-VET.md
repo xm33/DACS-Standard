@@ -32,7 +32,17 @@ The v0.1 method set is closed. New methods are added in subsequent versions of D
 
 #### 7.3.1 Common contract
 
-Every method MUST: (CM-1) accept inputs as specified in its sub-section; (CM-2) anchor its attestation via SR-2 at an address derived from the session id, claim scheme, and identifier (dacs2:{jobId}:{scheme}:{identifier}:v{recipeVersion} or substrate-equivalent — `{identifier}` is a CF-4 variable segment and MUST be percent-encoded before assembly, §6.3.4); (CM-3) produce a VerifyResult conforming to §7.5; (CM-4) classify its outcome as exactly one of pass, fail, indeterminate, or error per the semantics in §7.5.1; (CM-5) set VerifyResult.method to its own kind.
+Every method MUST:
+
+- **(CM-1)** accept inputs as specified in its sub-section;
+- **(CM-2)** anchor its attestation via SR-2 at an address derived from the session id, claim scheme, and identifier:
+
+  `dacs2:{jobId}:{scheme}:{identifier}:v{recipeVersion}`
+
+  (or substrate-equivalent) — `{identifier}` is a CF-4 variable segment and MUST be percent-encoded before assembly (§6.3.4);
+- **(CM-3)** produce a VerifyResult conforming to §7.5;
+- **(CM-4)** classify its outcome as exactly one of `pass`, `fail`, `indeterminate`, or `error` per the semantics in §7.5.1;
+- **(CM-5)** set `VerifyResult.method` to its own kind.
 
 #### 7.3.2 verifiable-credential
 
@@ -45,7 +55,23 @@ type VCMethodInput = {
 }
 ```
 
-**Procedure.** Verifier parses the presentation; verifies the VC signature against the issuer key (resolved per VC method); if issuerAllowList is set, MUST reject if the VC issuer is not in the list; verifies the VC has not expired and is not revoked (via status list, if present); verifies the VC’s subject identifier matches the claim’s identifier canonically; **verifies the VerifiablePresentation's holder-binding proof — the presentation MUST be signed by the key controlling the credential subject (the holder), over a challenge that includes the bundle's session nonce — per the §6.3.2 disjunction, the SIWD message `Nonce` for a `siwd`-presented bundle, else the top-level `bundleToVet.sessionNonce` (a SIWD-presented bundle does NOT populate the top-level field, so a VC claim inside one binds to the SIWD Nonce); this is the same session nonce the presentation check validated (Vet runs before DACS-3, so the bundle nonce is the comparison target); MUST reject if the holder proof is absent or does not verify** (without this, a verified VC captured from one party could be replayed by a non-holder, or re-presented across sessions — verifying the VC's issuer signature alone proves the credential is genuine, not that the presenter holds it); anchors the VC (or its hash, if VC is private) via SR-2; extracts structured data per recipe.parserRules; returns VerifyResult with pass if all steps succeed, fail on signature/expiry/revocation/holder-binding failures, and **error** on parser failures (a verifier-side failure to consume the presentation — never `fail`; consistent with PSP-2 and the §7.5.1 decision semantics, so it is retryable per VP-R1 rather than treated as a terminal authority answer). A parseable-but-inconclusive presentation is `indeterminate`. **Trust model:** issuer; W3C VC spec; key resolution method (e.g. did:web). **Substrate:** SR-2.
+**Procedure.** The verifier runs these steps:
+
+1. **Parse** the presentation.
+2. **Verify the VC signature** against the issuer key (resolved per the VC method).
+3. **Issuer allow-list** — if `issuerAllowList` is set, MUST reject if the VC issuer is not in the list.
+4. **Validity** — verify the VC has not expired and is not revoked (via status list, if present).
+5. **Subject match** — verify the VC’s subject identifier matches the claim’s identifier canonically.
+6. **Holder-binding proof** — verify the VerifiablePresentation's holder-binding proof: the presentation MUST be signed by the key controlling the credential subject (the holder), over a challenge that includes the bundle's session nonce (see *Session-nonce binding* below). MUST reject if the holder proof is absent or does not verify.
+7. **Anchor** the VC (or its hash, if the VC is private) via SR-2.
+8. **Extract** structured data per `recipe.parserRules`.
+9. **Return** a VerifyResult (see *Outcome* below).
+
+*Session-nonce binding.* The challenge nonce is, per the §6.3.2 disjunction, the SIWD message `Nonce` for a `siwd`-presented bundle, else the top-level `bundleToVet.sessionNonce` (a SIWD-presented bundle does NOT populate the top-level field, so a VC claim inside one binds to the SIWD Nonce). This is the same session nonce the presentation check validated (Vet runs before DACS-3, so the bundle nonce is the comparison target). Without it, a verified VC captured from one party could be replayed by a non-holder, or re-presented across sessions — verifying the VC's issuer signature alone proves the credential is genuine, not that the presenter holds it.
+
+*Outcome.* `pass` if all steps succeed; `fail` on signature/expiry/revocation/holder-binding failures; `error` on parser failures (a verifier-side failure to consume the presentation — never `fail`; consistent with PSP-2 and the §7.5.1 decision semantics, so it is retryable per VP-R1 rather than treated as a terminal authority answer); a parseable-but-inconclusive presentation is `indeterminate`.
+
+**Trust model:** issuer; W3C VC spec; key resolution method (e.g. did:web). **Substrate:** SR-2.
 
 #### 7.3.3 tlsnotary
 
@@ -109,7 +135,16 @@ type OAuthAttestedMethodInput = {
 }
 ```
 
-**Procedure.** Validates the attestation envelope’s signature; verifies the attestation references an OAuth flow that resolved to the claimed identifier (e.g. the sub claim from a Google ID token matches); verifies the granted scopes include those required by the recipe; **verifies the attestation is bound to this session — the attestation challenge/nonce MUST include the bundle's session nonce — per the §6.3.2 disjunction, the SIWD message `Nonce` for a `siwd`-presented bundle, else the top-level `bundleToVet.sessionNonce` — and the verifier MUST reject an envelope whose nonce does not match it** — so a captured attestation envelope cannot be replayed by a non-holder or across sessions within `maxTokenAgeSec`, consistent with the §7.3.2 verifiable-credential holder-binding requirement (if the attestation service cannot carry a nonce, the recipe MUST document the residual replay risk); anchors the attestation via SR-2; returns VerifyResult. **Trust model:** OAuth provider; attestation service honesty; TLS PKI. **Substrate:** SR-2 (SR-3 if the attestation service is the substrate’s API Verification primitive).
+**Procedure.** The verifier runs these steps:
+
+1. **Validate** the attestation envelope’s signature.
+2. **Identifier match** — verify the attestation references an OAuth flow that resolved to the claimed identifier (e.g. the `sub` claim from a Google ID token matches).
+3. **Scopes** — verify the granted scopes include those required by the recipe.
+4. **Session binding** — verify the attestation is bound to this session: the attestation challenge/nonce MUST include the bundle's session nonce (the §6.3.2 disjunction, as defined under *Session-nonce binding* in §7.3.2), and the verifier MUST reject an envelope whose nonce does not match it. This is the same anti-replay requirement as the §7.3.2 holder-binding rule — a captured envelope cannot be replayed by a non-holder or across sessions within `maxTokenAgeSec`. If the attestation service cannot carry a nonce, the recipe MUST document the residual replay risk.
+5. **Anchor** the attestation via SR-2.
+6. **Return** a VerifyResult.
+
+**Trust model:** OAuth provider; attestation service honesty; TLS PKI. **Substrate:** SR-2 (SR-3 if the attestation service is the substrate’s API Verification primitive).
 
 #### 7.3.7 evm-rpc
 
@@ -266,9 +301,19 @@ type ParserSpec =
 **ParserSpec semantics (normative).** Given the attested response body, a verifier applies the recipe’s ParserSpec to produce a decision and an optional extracted-data map:
 
 - (PSP-1) **successJsonPath / successSelector / successXPath / matcher** is the *match predicate*. For `json`, it is a JSONPath that MUST select at least one node for a match; for `html`, a CSS selector that MUST select at least one element; for `xml`, an XPath that MUST select at least one node; for `raw`, `matcher` is a regular expression (RE2 syntax, no backreferences) that MUST find at least one match in the body.
-- (PSP-2) **Decision mapping.** If the body parses in the declared format AND the match predicate matches → the method’s positive outcome (`pass` for a positive-match scheme such as `lei`; `fail` for a negative-match scheme such as `ofac-clear`, where a match means "listed"; the recipe’s `negativeMatch: true` flag selects this inversion). If the body parses but the predicate does not match → the negative outcome (`fail`, or `pass` for a negative-match scheme). If the body does NOT parse in the declared format (malformed JSON/HTML/XML, parser exception) → `error` (verifier-side failure to obtain a decision), never `fail`. A response the authority returns to signal "no conclusive answer" (e.g. an explicit pending/partial-record marker the recipe lists in `indeterminateOn`) → `indeterminate`. The `indeterminateOn` predicates, when present, are evaluated against the parsed body BEFORE the match predicate; if any of them matches, the decision is `indeterminate` and the match predicate is not applied. Each predicate uses the expression kind appropriate to the declared `format` (`jsonPath` for `json`, `selector` for `html`, `xPath` for `xml`, `matcher` for `raw`). (PSP-5) **Negative-match completeness floor.** For a negative-match scheme whose decision rests on the *absence* of the identifier in a full-list download (e.g. `ofac-clear` over SDN.XML), the verifier MUST confirm the response is **complete** before returning the negative (`pass` = "not listed") outcome: it MUST check the received response against a completeness signal — the authority's declared record-count / list-size field, a documented end-of-list sentinel, or the HTTP `Content-Length` matching the received byte count — and MUST NOT return `pass` on a response that is truncated, partial, or whose completeness cannot be confirmed (→ `indeterminate`). A truncated-but-parseable SDN download in which the searched entity merely fell outside the received bytes would otherwise clear a sanctioned party; absence MUST be trusted only over a provably-complete response. PSP-5 applies to any `negativeMatch: true` recipe whose match predicate is "identifier not found in a downloaded list".
+- (PSP-2) **Decision mapping.** Schemes have a *match polarity*: for a **positive-match** scheme (e.g. `lei`) a match means the claim holds; for a **negative-match** scheme (e.g. `ofac-clear`, where a match means "listed") the recipe’s `negativeMatch: true` flag inverts the outcome. The `indeterminateOn` predicates, when present, are evaluated against the parsed body BEFORE the match predicate; if any matches, the decision is `indeterminate` and the match predicate is not applied. Otherwise:
+
+  | Body parses? | Match predicate | positive-match scheme | negative-match scheme |
+  | --- | --- | --- | --- |
+  | yes | matches | `pass` | `fail` (match = "listed") |
+  | yes | no match | `fail` | `pass` |
+  | no — malformed JSON/HTML/XML, parser exception | — | `error` (verifier-side failure to obtain a decision, never `fail`) | `error` |
+  | authority signals "no conclusive answer" (a pending/partial-record marker listed in `indeterminateOn`) | — | `indeterminate` | `indeterminate` |
+
+  Each predicate uses the expression kind appropriate to the declared `format` (`jsonPath` for `json`, `selector` for `html`, `xPath` for `xml`, `matcher` for `raw`).
 - (PSP-3) **dataMap** maps output field names to JSONPath/selector/XPath expressions evaluated against the same body; each resolved value is recorded in the VerifyResult’s extracted data for audit. A `dataMap` expression that resolves to nothing is recorded as null and MUST NOT by itself change the decision.
 - (PSP-4) Parser evaluation MUST be deterministic and MUST NOT execute scripts, fetch sub-resources, or follow redirects embedded in the body.
+- (PSP-5) **Negative-match completeness floor.** For a negative-match scheme whose decision rests on the *absence* of the identifier in a full-list download (e.g. `ofac-clear` over SDN.XML), the verifier MUST confirm the response is **complete** before returning the negative (`pass` = "not listed") outcome. It MUST check the received response against a completeness signal — the authority's declared record-count / list-size field, a documented end-of-list sentinel, or the HTTP `Content-Length` matching the received byte count — and MUST NOT return `pass` on a response that is truncated, partial, or whose completeness cannot be confirmed (→ `indeterminate`). *Why:* a truncated-but-parseable SDN download in which the searched entity merely fell outside the received bytes would otherwise clear a sanctioned party; absence MUST be trusted only over a provably-complete response. PSP-5 applies to any `negativeMatch: true` recipe whose match predicate is "identifier not found in a downloaded list".
 
 *Worked example (`lei`, positive-match, GLEIF JSON-API):*
 
@@ -312,8 +357,22 @@ The v0.1 registry contains one recipe per scheme registered in chapter 6. Each r
 
 #### 7.4.3 Recipe authoring and resolution
 
-A conforming recipe author MUST: (RA-1) sign the recipe with the registry steward’s signing key over the domain-separated payload "dacs-recipe:v1:" || recipe_hash per §B.7; (RA-2) anchor the recipe via SR-2 at the canonical address; (RA-3) specify recipeVersion as monotonically increasing per scheme; (RA-4) specify supersedes when replacing a prior recipe for the same scheme; (RA-5) provide at least one alternative method only if the scheme’s underlying authority supports multiple equivalent attestation paths.
-A verifier MUST resolve a recipe by: reading the recipe-registry index from dacs2:registry:v0.1; looking up the entry for the claim’s scheme; fetching the recipe at the indicated anchor and verifying its content hash and domain-separated signature; if the matched `ClaimRequirement` pins a specific `recipeVersion` (§6.3.3), MUST use that version, otherwise MUST use the latest at session start, pinned into the session. This mirrors the rail-side `railVersion` pin (§9.3) and is the mechanism that protects an in-flight session from a steward shipping a recipe revision mid-session.
+A conforming recipe author MUST:
+
+- (RA-1) sign the recipe with the registry steward’s signing key over the domain-separated payload "dacs-recipe:v1:" || recipe_hash per §B.7;
+- (RA-2) anchor the recipe via SR-2 at the canonical address;
+- (RA-3) specify recipeVersion as monotonically increasing per scheme;
+- (RA-4) specify supersedes when replacing a prior recipe for the same scheme;
+- (RA-5) provide at least one alternative method only if the scheme’s underlying authority supports multiple equivalent attestation paths.
+
+A verifier MUST resolve a recipe by:
+
+1. reading the recipe-registry index from dacs2:registry:v0.1;
+2. looking up the entry for the claim’s scheme;
+3. fetching the recipe at the indicated anchor and verifying its content hash and domain-separated signature;
+4. if the matched `ClaimRequirement` pins a specific `recipeVersion` (§6.3.3), MUST use that version, otherwise MUST use the latest at session start, pinned into the session.
+
+This mirrors the rail-side `railVersion` pin (§9.3) and is the mechanism that protects an in-flight session from a steward shipping a recipe revision mid-session.
 
 #### 7.4.4 Recipe-track lifecycle and current steward
 
@@ -325,7 +384,17 @@ A verifier MUST resolve a recipe by: reading the recipe-registry index from dacs
 **Current steward (v0.1).** The DACS-2 recipe registry is currently maintained by **KyneSys Labs** as the v0.1 steward. This is a single-signer arrangement (phase PA-2 per the progressive-anchoring scheme below). Wider governance — working-group constitution, multi-signature schemes, sub-authority delegation by domain (sanctions lists, financial regulation, etc.) — is open work for v0.2+ and depends on the eventual constitution of a multi-party body. v0.1 implementations and consumers reason about the registry under single-steward semantics: one signing key, one anchoring authority, full transparency about both.
 **Emergency recipe updates.** When an authority endpoint becomes unavailable or returns materially-incompatible data, the steward MAY publish an emergency recipe revision. Emergency revisions MUST: be signed normally; include an emergency: true field in the governance block; cite the failure observation (URL of authority change announcement, observed response format diff). Emergency revisions take effect at next session start; in-flight sessions continue against pinned recipeVersion.
 **Recipe deprecation.** A recipe MAY be marked deprecated by publishing a new revision with deprecated: true and a deprecationReason. Verifiers MUST NOT initiate new sessions using deprecated recipes for required claims; in-flight sessions continue. A deprecated recipe with no replacement leaves the scheme un-verifiable; this is a v0.2 strengthening target for any scheme that hits this condition.
-**Progressive anchoring phases.** Recipe anchoring proceeds through three phases. (PA-1) **Bootstrap phase.** Implementations MAY ship recipes as in-code constants or static configuration. Recipes in this phase MUST be marked anchoring: "in-code" and MUST NOT be presented as canonically anchored. (PA-2) **Single-steward phase.** The steward (currently KyneSys Labs) anchors recipes at the canonical address under a single signature, marked anchoring: "single-signer" and disclosing the steward’s identity. This is the current operating phase for v0.1. (PA-3) **Constituted phase.** If and when a multi-party governance body is constituted, recipes anchor under that body’s multi-signature scheme. Re-anchoring is append-only: prior single-signer recipeVersions MUST remain anchored, immutable, and independently re-verifiable under the steward key and content hash recorded during the single-signer phase (PA-2). The constituted body re-anchors prior recipes only as NEW recipeVersions under its multi-signature scheme; it MUST NOT mutate the signer or content hash of an already-published recipeVersion. This preserves the monotonic recipe-version pinning that §7.12 and §12.4 depend on: a VerifyResult pinned to a recipeVersion during PA-2 MUST continue to validate against the anchoring phase and signing key in force at pin time, not the current registry state. **(GOV-2)** Implementations MUST clearly disclose which phase they operate in; **(GOV-3)** consumers reading a VerifyResult MUST verify the recipe’s anchoring phase against their own trust requirements, evaluating each pinned recipeVersion against the phase recorded at the time it was anchored. GOV-3 is satisfiable from the data the protocol exposes: the consumer already resolves the recipe to verify a VerifyResult (§7.4.3), and the resolved Recipe carries `governance.anchoring` (`in-code` / `single-signer` / `multisig`, §7.4.1) — that field is the machine-readable anchoring phase GOV-3 checks.
+**Progressive anchoring phases.** Recipe anchoring proceeds through three phases, recorded in the recipe's `governance.anchoring` field (§7.4.1):
+
+| Phase | `anchoring` value | What it means |
+| --- | --- | --- |
+| (PA-1) Bootstrap | `in-code` | Implementations MAY ship recipes as in-code constants or static configuration. Recipes in this phase MUST be marked `anchoring: "in-code"` and MUST NOT be presented as canonically anchored. |
+| (PA-2) Single-steward | `single-signer` | The steward (currently KyneSys Labs) anchors recipes at the canonical address under a single signature, marked `anchoring: "single-signer"` and disclosing the steward’s identity. **This is the current operating phase for v0.1.** |
+| (PA-3) Constituted | `multisig` | If and when a multi-party governance body is constituted, recipes anchor under that body’s multi-signature scheme. |
+
+**Append-only re-anchoring.** Re-anchoring is append-only: prior single-signer recipeVersions MUST remain anchored, immutable, and independently re-verifiable under the steward key and content hash recorded during the single-signer phase (PA-2). The constituted body re-anchors prior recipes only as NEW recipeVersions under its multi-signature scheme; it MUST NOT mutate the signer or content hash of an already-published recipeVersion. This preserves the monotonic recipe-version pinning that §7.12 and §12.4 depend on: a VerifyResult pinned to a recipeVersion during PA-2 MUST continue to validate against the anchoring phase and signing key in force at pin time, not the current registry state.
+
+**Phase disclosure.** (GOV-2) Implementations MUST clearly disclose which phase they operate in. (GOV-3) Consumers reading a VerifyResult MUST verify the recipe’s anchoring phase against their own trust requirements, evaluating each pinned recipeVersion against the phase recorded at the time it was anchored. GOV-3 is satisfiable from the data the protocol exposes: the consumer already resolves the recipe to verify a VerifyResult (§7.4.3), and the resolved Recipe carries `governance.anchoring` (`in-code` / `single-signer` / `multisig`, §7.4.1) — that field is the machine-readable anchoring phase GOV-3 checks.
 
 #### 7.4.5 Recipe availability (normative)
 
@@ -341,8 +410,18 @@ Every Recipe MUST declare an availability value. The value names the recipe’s 
 | disabled | Recipe exists but the steward has marked it not-for-use, typically because a successor recipe exists or the underlying scheme is being retired. Verifiers MUST NOT initiate new sessions using disabled recipes; in-flight sessions continue. |
 | failed | Recipe’s underlying authority is currently broken (endpoint down, response format changed in a way the parser cannot consume, certificate expired). Operationally indistinguishable from "live but unreachable" until the steward publishes an emergency revision or marks the recipe disabled. |
 
-**Consumer obligations.** Verifiers MUST inspect availability before running the recipe. (RAV-1) A verifier MUST NOT silently treat operator_gated, closed_data, bilateral, mocked, disabled, or failed as live. (RAV-2) A verifier presented with a VerifyResult produced under a non-live availability MUST surface the availability value to the verifier’s consumer; a UI flattening seven states into "verified" / "not verified" without disclosing availability is non-conformant. (RAV-3) Aggregation under §7.7.1 treats VerifyResults from disabled, failed, or **mocked** recipes as decision = "error" regardless of the underlying authority response (the recipe is non-operational or a stub; any output is unreliable). In particular a `mocked` recipe MUST NOT satisfy a required claim — its `pass` is a test fixture, not a verification. (`operator_gated` / `closed_data` / `bilateral` differ: they can run validly once the relevant operator-side configuration is in place, so they are not forced to `error`.) (RAV-4) The availability of an alternative method does not override the availability of the default; consumers selecting an alternative MUST honour that alternative’s own availability.
-**Steward obligations.** The current steward (§7.4.4 and §11.1.1) MUST keep availability values current. (RAV-5) Discovery that an authority endpoint has gone down requires either an emergency revision (§7.4.4) or a recipe revision setting availability to failed within a reasonable window. (RAV-6) Transitions from live → failed and failed → live are themselves recipe revisions and MUST be signed and anchored normally. (RAV-7) Availability is per-recipe-version, not per-scheme; a v3 recipe MAY be live while a v2 recipe is disabled for the same scheme.
+**Consumer obligations.** Verifiers MUST inspect availability before running the recipe.
+
+- (RAV-1) A verifier MUST NOT silently treat operator_gated, closed_data, bilateral, mocked, disabled, or failed as live.
+- (RAV-2) A verifier presented with a VerifyResult produced under a non-live availability MUST surface the availability value to the verifier’s consumer; a UI flattening seven states into "verified" / "not verified" without disclosing availability is non-conformant.
+- (RAV-3) Aggregation under §7.7.1 treats VerifyResults from disabled, failed, or **mocked** recipes as decision = "error" regardless of the underlying authority response (the recipe is non-operational or a stub; any output is unreliable). In particular a `mocked` recipe MUST NOT satisfy a required claim — its `pass` is a test fixture, not a verification. (`operator_gated` / `closed_data` / `bilateral` differ: they can run validly once the relevant operator-side configuration is in place, so they are not forced to `error`.)
+- (RAV-4) The availability of an alternative method does not override the availability of the default; consumers selecting an alternative MUST honour that alternative’s own availability.
+
+**Steward obligations.** The current steward (§7.4.4 and §11.1.1) MUST keep availability values current.
+
+- (RAV-5) Discovery that an authority endpoint has gone down requires either an emergency revision (§7.4.4) or a recipe revision setting availability to failed within a reasonable window.
+- (RAV-6) Transitions from live → failed and failed → live are themselves recipe revisions and MUST be signed and anchored normally.
+- (RAV-7) Availability is per-recipe-version, not per-scheme; a v3 recipe MAY be live while a v2 recipe is disabled for the same scheme.
 **Why this is normative, not informative.** Earlier drafts carried this distinction in the front-matter production-mapping legend as informative iconography (🟢 / 🟡 / 🔵). That framing flattened distinct operational states (live, operator-gated, closed-data, mocked, etc.) into a single "wired" status and pushed disambiguation onto every implementer’s UI surface. Promoting availability to a normative field on the recipe itself moves the disambiguation into the protocol layer, where verifiers can reason about it programmatically and consumers can rely on conformant disclosure. This change was proposed by PATH-OS Labs (third-party reviewer; §11.3) and accepted into v0.1.
 
 ### 7.5 VerifyResult
@@ -411,16 +490,45 @@ The four decision values are not interchangeable. Each has distinct semantics th
 
 #### 7.5.2 Attestation resolution algorithm
 
-A consumer of a VerifyResult MUST validate the attestation by: fetching the anchor at AttestationRef.anchor.locator; checking integrity against AttestationRef.contentHash by the same procedure that produced it at anchor time (contentHash is the sha256 of the anchored content's canonical form, per the Content-hash definition) — for attestations that are canonical-JSON DACS documents, parsing the fetched content, recomputing the RFC 8785 canonical form, and comparing sha256(canonical_form) to AttestationRef.contentHash; for raw-byte attestations (e.g. a consensus-backed-proxy response body per §7.3.5, a tlsnotary proof, or an oauth-attested envelope), hashing the fetched bytes and comparing sha256(bytes) to AttestationRef.contentHash (mismatch MUST cause rejection in either case); for methods with signer, validating the attestation signature against the signer’s known key (mismatch MUST cause rejection); optionally parsing the attestation to independently re-derive the structured data (for high-stakes verifications).
+A consumer of a VerifyResult MUST validate the attestation by:
+
+1. fetching the anchor at AttestationRef.anchor.locator;
+2. checking integrity against AttestationRef.contentHash by the same procedure that produced it at anchor time (contentHash is the sha256 of the anchored content's canonical form, per the Content-hash definition):
+   - for attestations that are canonical-JSON DACS documents — parsing the fetched content, recomputing the RFC 8785 canonical form, and comparing sha256(canonical_form) to AttestationRef.contentHash;
+   - for raw-byte attestations (e.g. a consensus-backed-proxy response body per §7.3.5, a tlsnotary proof, or an oauth-attested envelope) — hashing the fetched bytes and comparing sha256(bytes) to AttestationRef.contentHash;
+   - mismatch MUST cause rejection in either case;
+3. for methods with signer, validating the attestation signature against the signer’s known key (mismatch MUST cause rejection);
+4. optionally parsing the attestation to independently re-derive the structured data (for high-stakes verifications).
 
 ### 7.6 Verification procedure
 
-The verifier MUST execute each claim verification by: (1) resolving the recipe and pinning recipeVersion to the session record; (2) rendering method inputs by substituting the claim’s identifier into the method’s template; (3) invoking the method (calling the appropriate substrate primitive for SR-3 methods, or external service); (4) receiving the attestation (raw bytes or a reference if too large for inline transport); (5) anchoring the attestation via SR-2 at the derived address; (6) parsing the response by applying recipe.parserRules to extract structured data into VerifyResult.data; (7) applying parameters — checking the listing’s ClaimRequirement.parameters against extracted data (failure to match MUST set decision = "fail"); (8) signing and emitting the VerifyResult.
+The verifier MUST execute each claim verification by:
+
+1. resolving the recipe and pinning recipeVersion to the session record;
+2. rendering method inputs by substituting the claim’s identifier into the method’s template;
+3. invoking the method (calling the appropriate substrate primitive for SR-3 methods, or external service);
+4. receiving the attestation (raw bytes or a reference if too large for inline transport);
+5. anchoring the attestation via SR-2 at the derived address;
+6. parsing the response by applying recipe.parserRules to extract structured data into VerifyResult.data;
+7. applying parameters — checking the listing’s ClaimRequirement.parameters against extracted data (failure to match MUST set decision = "fail");
+8. signing and emitting the VerifyResult.
 
 #### 7.6.1 Retry and caching semantics
 
-(VP-R1) On decision = "error" with recipe.retryClass == "transient", the verifier MAY retry up to a recipe-defined retry budget (default: 3 attempts, exponential backoff). (VP-R2) A retry MUST produce a new attestation; reusing the prior attestation is not a retry. (VP-R3) On recipe.retryClass == "permanent", the verifier MUST NOT retry within the same session; the failure is final for that session. (VP-R4) On decision = "indeterminate", the verifier MUST NOT retry unless recipe.retryOnIndeterminate is explicitly true (default false). The authority’s indeterminate answer is itself the answer; re-asking does not change it. The retryOnIndeterminate flag is reserved for authorities whose "pending" or "queued" responses become conclusive on re-fetch.
-(VP-C1) A VerifyResult for (scheme, identifier, recipeVersion) MAY be reused while `now ≤ (VerifyResult.validUntil ?? (verifiedAt + defaultMaxAgeSec × 1000))`, where `defaultMaxAgeSec` is from the recipe at that `recipeVersion` — i.e. `validUntil` governs when present, and `defaultMaxAgeSec` is the fallback only when `validUntil` is absent. This is the SAME `validUntil ?? default` window the §6.3.2 freshness gate uses (the `min` with `BundleClaim.expiresAt` in §6.3.2 is the bundle-presentation clamp, which has no analogue at reuse time), so the reuse and freshness rules agree. (VP-C2) Reuse MUST update the consuming session’s record to reference the cached VerifyResult. (VP-C3) Reuse MUST NOT bypass freshness requirements declared by the listing’s ClaimRequirement.maxAge.
+**Retry policy.** The verifier retries only its own *transient* failures; an authority's substantive answer is final.
+
+- (VP-R1) On `decision = "error"` with `recipe.retryClass == "transient"`, the verifier MAY retry up to a recipe-defined retry budget (default: 3 attempts, exponential backoff).
+- (VP-R2) A retry MUST produce a new attestation; reusing the prior attestation is not a retry.
+- (VP-R3) On `recipe.retryClass == "permanent"`, the verifier MUST NOT retry within the same session; the failure is final for that session.
+- (VP-R4) On `decision = "indeterminate"`, the verifier MUST NOT retry unless `recipe.retryOnIndeterminate` is explicitly true (default false). The authority’s indeterminate answer is itself the answer; re-asking does not change it. The `retryOnIndeterminate` flag is reserved for authorities whose "pending" or "queued" responses become conclusive on re-fetch.
+**Reuse / caching.** (VP-C1) A VerifyResult for `(scheme, identifier, recipeVersion)` MAY be reused while it is still fresh:
+
+    now ≤ VerifyResult.validUntil ?? (verifiedAt + defaultMaxAgeSec × 1000)
+
+`validUntil` governs when present; `defaultMaxAgeSec` (read from the recipe at *that* `recipeVersion`) is the fallback only when `validUntil` is absent. This is the SAME `validUntil ?? default` window the §6.3.2 freshness gate uses (the `min` with `BundleClaim.expiresAt` in §6.3.2 is the bundle-presentation clamp, which has no analogue at reuse time), so the reuse and freshness rules agree.
+
+- (VP-C2) Reuse MUST update the consuming session’s record to reference the cached VerifyResult.
+- (VP-C3) Reuse MUST NOT bypass freshness requirements declared by the listing’s `ClaimRequirement.maxAge` (the listing can demand fresher than the cache window).
 
 ### 7.7 Composite verification record
 
@@ -468,7 +576,16 @@ type WarningCode =
   | "RETRY_EXHAUSTED"                           // all VP-R1 retry attempts spent (terminal)
 ```
 
-**Verification warnings (rules WN-1..WN-6).** The optional `warnings` array surfaces transient/retryable verification conditions encountered while producing the record — without changing the verification decision. Warnings are strictly advisory and orthogonal to the §7.7.1 aggregation: (WN-1) the presence of one or more warnings MUST NOT change `overallDecision`; (WN-2) warnings MUST NOT be used to convert a `pass` into a `fail` or vice versa; (WN-3) warnings MUST be preserved in the record even when `overallDecision` is `pass` (they document conditions a consumer may act on operationally, e.g. an authority that was rate-limited but answered on retry); (WN-4) `suggestedRetryAfterMs` is an advisory per-authority hint and does NOT override the recipe-level `backoff` (§7.4.1) or `retryBudget` (§7.6.1 VP-R1) — the recipe remains the governing retry policy and the warning only adds per-authority context; (WN-5) consumers SHOULD surface warnings to human operators when `overallDecision` is `indeterminate` (the warnings often explain *why* the answer was inconclusive); (WN-6) implementations MAY add implementation-specific `code` values but SHOULD prefer the enumerated v0.1 codes when applicable, and a consumer encountering an unknown code MUST treat it conservatively (as advisory, never as grounds to elevate or downgrade the decision — consistent with WN-1/WN-2). The codes align with the §7.6.1 retry taxonomy: the five transient codes correspond to a VP-R1 retryable `error`, and `RETRY_EXHAUSTED` records that the VP-R1 budget was spent.
+**Verification warnings (rules WN-1..WN-6).** The optional `warnings` array surfaces transient/retryable verification conditions encountered while producing the record — without changing the verification decision. Warnings are strictly advisory and orthogonal to the §7.7.1 aggregation:
+
+- (WN-1) the presence of one or more warnings MUST NOT change `overallDecision`;
+- (WN-2) warnings MUST NOT be used to convert a `pass` into a `fail` or vice versa;
+- (WN-3) warnings MUST be preserved in the record even when `overallDecision` is `pass` (they document conditions a consumer may act on operationally, e.g. an authority that was rate-limited but answered on retry);
+- (WN-4) `suggestedRetryAfterMs` is an advisory per-authority hint and does NOT override the recipe-level `backoff` (§7.4.1) or `retryBudget` (§7.6.1 VP-R1) — the recipe remains the governing retry policy and the warning only adds per-authority context;
+- (WN-5) consumers SHOULD surface warnings to human operators when `overallDecision` is `indeterminate` (the warnings often explain *why* the answer was inconclusive);
+- (WN-6) implementations MAY add implementation-specific `code` values but SHOULD prefer the enumerated v0.1 codes when applicable, and a consumer encountering an unknown code MUST treat it conservatively (as advisory, never as grounds to elevate or downgrade the decision — consistent with WN-1/WN-2).
+
+The codes align with the §7.6.1 retry taxonomy: the five transient codes correspond to a VP-R1 retryable `error`, and `RETRY_EXHAUSTED` records that the VP-R1 budget was spent.
 
 CCI-native reputation signals (cci-nomis, cci-ethos, cci-humanpassport) are first-class supplementary signal sources: they are read from the counterparty’s CCI without needing a separate attestation, because the underlying CCI context’s GCR routine has already validated them.
 
@@ -565,7 +682,10 @@ Supplementary signals MUST NOT change overallDecision from pass to fail automati
 
 #### 7.7.2 Anchoring and signature
 
-The composite record MUST be anchored via SR-2 at address dacs2:composite:{jobId}:{evaluatedParty} (or substrate equivalent — `{evaluatedParty}` is a ClaimReference and a CF-4 variable segment, so MUST be percent-encoded before assembly, §6.3.4). The anchor reference is recorded in the DACS-5 session record. The composite record’s signature MUST be produced by the verifier (the party running Vet on the counterparty) over the domain-separated payload per §B.7:
+- **Anchor.** The composite record MUST be anchored via SR-2 at address `dacs2:composite:{jobId}:{evaluatedParty}` (or substrate equivalent). `{evaluatedParty}` is a ClaimReference and a CF-4 variable segment, so it MUST be percent-encoded before assembly (§6.3.4).
+- **Record.** The anchor reference is recorded in the DACS-5 session record.
+- **Sign.** The composite record’s signature MUST be produced by the verifier (the party running Vet on the counterparty) over the domain-separated payload per §B.7:
+
 signed_bytes := "dacs-composite:v1:" || composite_hash
 In v0.1, the composite record carries a single verifier signature. Multi-party composition (e.g., two-sided independent Vet records cross-referenced into one) is deferred to v2.
 
@@ -594,7 +714,24 @@ type VetCredentialsOutput = PhaseHandlerResult & {
 
 #### 7.8.1 Phase contract
 
-The orchestrator MUST: (VPC-1) invoke vet-credentials after a successful Identify stage and before any Negotiate phase requiring a verified bundle; (VPC-2) invoke vet-credentials once per party — once with the buyer’s bundle (against listing-side requirements on buyers) and once with the seller’s bundle (against buyer-side requirements on sellers), each invocation producing its own CompositeVerificationRecord (the input carries a single `bundleToVet` + `actor`) — before Negotiate; (VPC-3) anchor the composite record before returning the phase result; (VPC-4) on overallDecision != "pass" (after permitted retries), MUST fail the phase with errorClass derived from the overall decision: "fail" → counterparty errorClass; "indeterminate" or "error" → permanent, EXCEPT an error/indeterminate whose sole proximate cause is a presentation the counterparty supplied that the verifier could not parse in its declared format → counterparty (§7.8.2). This affects fault attribution only; the overall decision is unchanged. By the point VPC-4 is evaluated the retry budget is already exhausted (`indeterminate` MUST NOT be retried at all per VP-R4; `error` is retried only while budget remains), so the *phase-overall* outcome is terminal: the `transient` class applies to in-flight retries, never to the phase-fail result. This matches the §7.8.2 cause table (`indeterminate`/`error` after retry-budget exhaustion → permanent).
+The orchestrator MUST:
+
+- (VPC-1) invoke vet-credentials after a successful Identify stage and before any Negotiate phase requiring a verified bundle;
+- (VPC-2) invoke vet-credentials **once per party** — each party's bundle is vetted against the *counterparty's* requirements:
+  - the buyer’s bundle against listing-side requirements on buyers, and
+  - the seller’s bundle against buyer-side requirements on sellers —
+
+  each invocation producing its own CompositeVerificationRecord (the input carries a single `bundleToVet` + `actor`), before Negotiate;
+- (VPC-3) anchor the composite record before returning the phase result;
+- (VPC-4) on `overallDecision != "pass"` (after permitted retries), MUST fail the phase with `errorClass` derived from the overall decision:
+
+  | overall decision | `errorClass` (fault attribution) |
+  | --- | --- |
+  | `fail` | counterparty |
+  | `indeterminate` / `error` | permanent |
+  | *except* an `error`/`indeterminate` whose sole proximate cause is a presentation the counterparty supplied that the verifier could not parse in its declared format | counterparty (§7.8.2) |
+
+This affects fault attribution only; the overall decision is unchanged. By the point VPC-4 is evaluated the retry budget is already exhausted (`indeterminate` MUST NOT be retried at all per VP-R4; `error` is retried only while budget remains), so the *phase-overall* outcome is terminal: the `transient` class applies to in-flight retries, never to the phase-fail result. This matches the §7.8.2 cause table (`indeterminate`/`error` after retry-budget exhaustion → permanent).
 
 #### 7.8.2 Error classification and idempotency
 
