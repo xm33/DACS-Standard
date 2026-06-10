@@ -193,14 +193,24 @@ The v0.1 registry contains rail entries for the most-used settlement paths in pr
 | ap2:stripe-paymentintents | pay-ap2 | AP2 mandate to Stripe PaymentIntents |
 | x402:default | pay-x402 | Generic x402 HTTP 402 micropayment |
 
-**v0.1 cross-chain settlement scope.** pay-cross-chain-liquidity-tank is supported **only** for the live tank routes (ETH Sepolia ↔ Polygon Amoy testnet; USDC; EVM-source unidirectional). All other tank rails are 🟡 to-add and will unlock as Native Bridges Phase 2–4 ship (Solana tanks, bidirectional, additional EVM rails, mainnet deployments, non-USDC stablecoins). pay-cross-chain-htlc is the path the reference implementation runs today (929 LOC reference implementation: Solana Anchor program + Base Sepolia EVM HTLC contract, lock/reveal/refund implemented end-to-end). v0.1 keeps both first-class.
+**v0.1 cross-chain settlement scope.** `pay-cross-chain-liquidity-tank` is supported **only** for the live tank routes: ETH Sepolia ↔ Polygon Amoy testnet, USDC, EVM-source unidirectional. All other tank rails are 🟡 to-add. `pay-cross-chain-htlc` has no v0.1 route restriction. v0.1 keeps both first-class.
 
-**v0.1 rail reference-backing status (honest disclosure).** The DACS v0.1 bar is that a rail is *reference-backed* when a live settlement path exists **and** a reference implementation exercises it. The registered rails differ in maturity, so an orchestrator MUST consult each rail's pinned `availability` (§9.4.4) rather than assume `live`:
+> **Note (non-normative).** Further tank routes unlock as Native Bridges Phase 2–4 ship: Solana tanks, bidirectional routes, additional EVM rails, mainnet deployments, non-USDC stablecoins. HTLC is the path the reference implementation runs today — a ~929-LOC reference (Solana Anchor program + Base Sepolia EVM HTLC contract) with lock/reveal/refund implemented end-to-end.
 
-- **Reference-backed today** — `pay-evm-erc20`, `pay-solana-spl`, `pay-cross-chain-htlc`: exercised by the reference implementation, with §14 conformance vectors.
-- **Partially live** — `pay-cross-chain-liquidity-tank`: live only on the Phase-1 testnet route above (ETH Sepolia → Polygon Amoy, USDC, unidirectional); other routes are to-add.
-- **Exercised by the reference implementation; conformance-vector pending** — `pay-x402` (§9.5.7): x402 settles a gasless USDC transfer **on its settlement chain** (e.g. Base), so a `pay-x402` `SettlementEvidence` record is **chain-verifiable against the settlement chain, exactly like the `evm` rail** (via `settlementTxHash`/`chainId`); the rail is **not** `operator_gated`. The reference implementation runs x402 end-to-end as a primary rail (a buyer-side x402 client signing an EIP-3009/Permit2 authorisation and settling USDC on Base). It therefore meets the live-path + reference-implementation bar; the only outstanding item for parity with the rails above is a **§14 conformance vector**.
-- **Specified, not yet reference-backed** — `pay-ap2` (§9.5.6): handler procedure, registry entries, and evidence shape are defined, but in v0.1 there is **no live settlement path and no §14 conformance vector**. `pay-ap2` settles **off-chain** (a provider receipt, not chain-verifiable), is `operator_gated` (it requires AP2 provider onboarding — Visa Direct / Mastercard Send / Stripe PaymentIntents), and AP2 itself was donated to the FIDO Alliance only in April 2026. Its v0.1 registry entries therefore declare a non-`live` `availability` (`operator_gated` or `mocked`), and orchestrators MUST NOT treat it as `live` (RAV-R1). Bringing it to reference-backed status (a live path plus conformance vectors) is roadmap work.
+**v0.1 rail reference-backing status.** A rail is *reference-backed* when a live settlement path exists **and** a reference implementation exercises it. The registered rails differ in maturity. An orchestrator MUST consult each rail's pinned `availability` (§9.4.4) rather than assume `live`. In particular, `pay-ap2` registry entries declare a non-`live` `availability` (`operator_gated` or `mocked`) in v0.1, and orchestrators MUST NOT treat them as `live` (RAV-R1).
+
+Maturity by rail:
+
+| Rail(s) | v0.1 status |
+| --- | --- |
+| `pay-evm-erc20`, `pay-solana-spl`, `pay-cross-chain-htlc` | Reference-backed: exercised by the reference implementation, with §14 conformance vectors |
+| `pay-cross-chain-liquidity-tank` | Partially live: only the Phase-1 testnet route above; other routes to-add |
+| `pay-x402` | Exercised by the reference implementation; §14 conformance vector pending; **not** `operator_gated` (see note) |
+| `pay-ap2` | Specified, not yet reference-backed: no live settlement path, no §14 conformance vector; `operator_gated` (see note) |
+
+> **Note (non-normative).** *pay-x402* (§9.5.7) — x402 settles a gasless USDC transfer **on its settlement chain** (e.g. Base), so a `pay-x402` `SettlementEvidence` record is chain-verifiable against the settlement chain via `settlementTxHash`/`chainId`, exactly like the `evm` rail. The reference implementation runs x402 end-to-end as a primary rail: a buyer-side x402 client signing an EIP-3009/Permit2 authorisation and settling USDC on Base. It therefore meets the live-path + reference-implementation bar; the only outstanding item for parity with the rails above is a §14 conformance vector.
+>
+> *pay-ap2* (§9.5.6) — the handler procedure, registry entries, and evidence shape are defined, but there is no live path. `pay-ap2` settles **off-chain** (a provider receipt, not chain-verifiable) and requires AP2 provider onboarding (Visa Direct / Mastercard Send / Stripe PaymentIntents); AP2 itself was donated to the FIDO Alliance only in April 2026. Bringing it to reference-backed status — a live path plus conformance vectors — is roadmap work.
 
 #### 9.4.3 Rail authoring and resolution
 
@@ -219,7 +229,13 @@ A consumer MUST resolve a rail by:
 3. fetching the rail at the indicated anchor and verifying its content hash and signature;
 4. if the agreement pins a specific railVersion, MUST use that version; otherwise MUST use the latest at session start, pinned into the session.
 
-**Progressive anchoring for early deployments.** The rail registry follows the same progressive anchoring pattern as the DACS-2 recipe registry (§7.4.4). Phase PA-1 (bootstrap): rails shipped as in-code constants. Phase PA-2 (current): rails anchored by the steward (currently KyneSys Labs) under a single signature. Phase PA-3 (future): rails anchored under multi-signature governance if and when a constituted body is established. Implementations MUST disclose which phase they operate in; consumers MUST verify the rail’s anchoring phase against their own trust requirements.
+**Progressive anchoring for early deployments.** The rail registry follows the same progressive anchoring pattern as the DACS-2 recipe registry (§7.4.4):
+
+- **PA-1 (bootstrap)** — rails shipped as in-code constants.
+- **PA-2 (current)** — rails anchored by the steward, currently KyneSys Labs, under a single signature.
+- **PA-3 (future)** — rails anchored under multi-signature governance, if and when a constituted body is established.
+
+Implementations MUST disclose which phase they operate in. Consumers MUST verify the rail’s anchoring phase against their own trust requirements.
 
 #### 9.4.4 Rail availability (normative)
 
@@ -238,8 +254,11 @@ Every RailDefinition MUST declare an availability value, with the same value set
 - (RAV-R1) An orchestrator MUST inspect rail availability before selecting a rail for a session.
 - (RAV-R2) An orchestrator MUST NOT select rails with availability values disabled or failed.
 - (RAV-R3) An orchestrator MAY select rails with availability values operator_gated, closed_data, or bilateral only if the relevant operator-side configuration is in place; this is a runtime preflight check, not a static property of the rail.
-- (RAV-R4) A rail's `availability` is pinned at session start (§9.13), so a mid-session availability *flip* is not observable from the pinned definition. RAV-R4 therefore binds at the point of use: if a settlement attempt on the pinned rail fails because the rail is non-operational — a rail-down / substrate failure, distinct from a transient RPC hiccup or a counterparty error — the orchestrator MUST classify the failure errorClass = substrate (rail is non-operational), not counterparty. A proactive out-of-band rail-liveness probe that lets an orchestrator detect failure *before* attempting settlement (mirroring the §8.12 CH-4 channel-liveness probe) is a roadmap item; v0.1 detects rail failure at the settlement attempt.
-- (RAV-R5) **Authoritative availability read.** An orchestrator MUST read `availability` from the authoritative rail definition — the signed/anchored `dacs-rail:v1:` record pinned at session start — NOT from an unauthenticated cache, discovery mirror, or counterparty-supplied copy. This closes availability-field poisoning, where a tampered pre-pin read would steer an orchestrator onto a disabled/failed rail (or away from a live one); the pinned, signed definition is the only trusted source.
+- (RAV-R4) A rail's `availability` is pinned at session start (§9.13), so a mid-session availability *flip* is not observable from the pinned definition; RAV-R4 therefore binds at the point of use. If a settlement attempt on the pinned rail fails because the rail is non-operational, the orchestrator MUST classify the failure `errorClass: "substrate"`, not `counterparty`. Rail-non-operational means a rail-down / substrate failure, as distinct from a transient RPC hiccup or a counterparty error.
+- (RAV-R5) **Authoritative availability read.** An orchestrator MUST read `availability` from the authoritative rail definition: the signed, anchored `dacs-rail:v1:` record pinned at session start. It MUST NOT read `availability` from an unauthenticated cache, discovery mirror, or counterparty-supplied copy.
+
+> **Note (non-normative).** RAV-R4: a proactive out-of-band rail-liveness probe, mirroring the §8.12 CH-4 channel-liveness probe, would let an orchestrator detect failure *before* attempting settlement. That probe is a roadmap item; v0.1 detects rail failure at the settlement attempt.
+> RAV-R5 closes availability-field poisoning: a tampered pre-pin read could steer an orchestrator onto a disabled/failed rail, or away from a live one. The pinned, signed definition is the only trusted source.
 
 **Steward obligations.** Same as recipe availability (RAV-5, RAV-6, RAV-7 in §7.4.5) applied to rails. The steward maintains availability values current; transitions are signed and anchored revisions; availability is per-rail-version.
 
@@ -253,7 +272,19 @@ Every pay-* phase handler MUST:
 
 **(PC-1)** accept a PaymentPhaseInput conforming to the shape below.
 
-**(PC-2)** produce SettlementEvidence anchored via SR-2 at `dacs4:payment:{jobId}:{railId}:{phaseIndex}[:resolved]` (or substrate equivalent). `phaseIndex` (the bare-integer pipeline phase index of this pay-* invocation, `BundlePhaseEntry.index`) is REQUIRED so repeated pay-* phases (PIPE-5) do not collide at one address (mirroring the entitlement `renewalSeq` and amendment `amendmentIndex` discipline); an ST-8 resolution anchors its superseding success record at the same address with a trailing `:resolved` segment; `railId` is a CF-4 variable segment and MUST be percent-encoded before assembly (internal colons → `%3A`, CORE §B.1), while `jobId` (ULID), `phaseIndex`, and `resolved` need no encoding.
+**(PC-2)** produce SettlementEvidence anchored via SR-2 at `dacs4:payment:{jobId}:{railId}:{phaseIndex}[:resolved]` (or substrate equivalent). Segment rules:
+
+- `phaseIndex` is the bare-integer pipeline phase index of this pay-* invocation (`BundlePhaseEntry.index`). It is REQUIRED so repeated pay-* phases (PIPE-5) do not collide at one address.
+- An ST-8 resolution anchors its superseding success record at the same address with a trailing `:resolved` segment.
+- `railId` is a CF-4 variable segment and MUST be percent-encoded before assembly (internal colons → `%3A`, CORE §B.1). `jobId` (a ULID), `phaseIndex`, and `resolved` need no encoding.
+
+Worked example — `jobId` `01J8ME0SXKQ4T9V2RC5HJ6WX7D`, rail `evm-erc20:8453:USDC`, phase index 3, after an ST-8 resolution:
+
+```
+dacs4:payment:01J8ME0SXKQ4T9V2RC5HJ6WX7D:evm-erc20%3A8453%3AUSDC:3:resolved
+```
+
+> **Note (non-normative).** The `phaseIndex` discriminator mirrors the entitlement `renewalSeq` and amendment `amendmentIndex` discipline: every repeatable artifact carries a monotonic component in its address.
 
 **(PC-3)** return a PhaseHandlerResult with `attestationRef` pointing to the evidence (except as deferred by PC-7 for the cross-chain anchor-pending case).
 
@@ -267,7 +298,7 @@ Every pay-* phase handler MUST:
 | `substrate` | SR-2 unavailable, and no irreversible on-chain value movement has occurred (see PC-7) |
 | `settlement-atomicity` | cross-chain only; one leg reached a terminal or asymmetric state the other did not match — a timeout, or the HTLC-9 preimage-revealed-but-counterpart-unclaimed state |
 
-For the HTLC-9 asymmetric-open sub-case the handler signals the open state and the orchestrator routes the session to the non-terminal `settle-asymmetric` state (§10.3.1, ST-8); a `settlement-atomicity` *terminal* (`settle-failed`) is reached only after the ST-8 recovery window expires unresolved.
+For the HTLC-9 asymmetric-open sub-case, the handler signals the open state and the orchestrator routes the session to the non-terminal `settle-asymmetric` state (§10.3.1, ST-8). A terminal `settlement-atomicity` outcome — the `settle-failed` state — is reached only after the ST-8 recovery window expires unresolved.
 
 **(PC-5)** before settling, `amount.currency` MUST resolve to `rail.asset` (reject a mismatch as `ok: false` / `errorClass: "permanent"`), per AssetSpec kind:
 
@@ -281,14 +312,23 @@ Handlers MUST NOT settle a payment whose `amount.currency` does not resolve unde
 
 **(PC-6)** when outcome is `success`, populate `settlementFinality` (the finality model and parameters actually applied) in the produced SettlementEvidence — REQUIRED on any `success`-outcome payment evidence record, and absent on delivery evidence records.
 
-**(PC-7) Cross-chain anchor/settlement decoupling.** On cross-chain rails the value moves on two foreign chains independent of the SR-2 substrate, so evidence anchoring is decoupled from settlement success. **Principle: once value has irreversibly moved on the foreign chains, anchoring is bookkeeping that must catch up — never a reason to fail or pause the payment.** Once irreversible movement is confirmed — an HTLC fully settled on BOTH legs (the payee's `htlc-claim` reaching source-chain finality, §9.5.4, not the HTLC-9 asymmetric state), or a liquidity-tank op reaching `completed` — the handler:
+**(PC-7) Cross-chain anchor/settlement decoupling.** On cross-chain rails the value moves on two foreign chains independent of the SR-2 substrate, so evidence anchoring is decoupled from settlement success. **Principle: once value has irreversibly moved on the foreign chains, anchoring is bookkeeping that must catch up — never a reason to fail or pause the payment.**
+
+*Irreversible movement* means: an HTLC fully settled on BOTH legs — the payee's `htlc-claim` reaching source-chain finality (§9.5.4), not the HTLC-9 asymmetric state — or a liquidity-tank op reaching `completed`.
+
+Once irreversible movement is confirmed, the handler:
 
 - (a) MUST return `ok: true` with the confirmed foreign-chain `txRefs` even if SR-2 anchoring is unavailable or pending;
-- (b) MUST queue a durable anchor-retry idempotent on the `dacs4:payment:{jobId}:{railId}:{phaseIndex}` address (write-once by the PC-2 discriminator, so a re-anchor cannot duplicate the record);
-- (c) MAY omit `attestationRef` until the retry confirms the anchor, then attach it — `PhaseHandlerResult.attestationRef` is OPTIONAL in §5 precisely to permit this, and the PC-2/PC-3 obligations are satisfied by the retry rather than at return time;
-- (d) MUST NOT classify this as `errorClass: "substrate"` (reserved for SR-2 unavailability *before* any irreversible movement, per PC-4).
+- (b) MUST queue a durable anchor-retry idempotent on the `dacs4:payment:{jobId}:{railId}:{phaseIndex}` address — write-once by the PC-2 discriminator, so a re-anchor cannot duplicate the record;
+- (c) MAY omit `attestationRef` until the retry confirms the anchor, then attach it. `PhaseHandlerResult.attestationRef` is OPTIONAL in §5 precisely to permit this; the PC-2/PC-3 obligations are satisfied by the retry rather than at return time;
+- (d) MUST NOT classify this as `errorClass: "substrate"` — that class is reserved for SR-2 unavailability *before* any irreversible movement, per PC-4.
 
-This is the one carve-out from the ST-7 substrate-failure-pause (§10.3.1): because value has already moved irreversibly, the handler commits `ok: true` and anchors via the retry rather than pausing. Two guards: it **EXCLUDES the HTLC-9** dest-revealed / source-claim-failed asymmetric state — half-settled, routed to `settle-asymmetric` (ST-8) and surfaced as §9.5.4 asymmetric-settlement evidence, never PC-7 `ok: true`; and any retry of a cross-chain payment phase MUST first check foreign-chain settlement state (HTLC lock/reveal/claim txRefs, or the tank `bridge_id` status) before re-submitting, to avoid double-settlement.
+PC-7 is the one carve-out from the ST-7 substrate-failure-pause (§10.3.1): because value has already moved irreversibly, the handler commits `ok: true` and anchors via the retry rather than pausing.
+
+Two guards:
+
+- PC-7 **EXCLUDES the HTLC-9** dest-revealed / source-claim-failed asymmetric state. That state is half-settled: it routes to `settle-asymmetric` (ST-8) and is surfaced as §9.5.4 asymmetric-settlement evidence, never as PC-7 `ok: true`.
+- Any retry of a cross-chain payment phase MUST first check foreign-chain settlement state — the HTLC lock/reveal/claim txRefs, or the tank `bridge_id` status — before re-submitting, to avoid double-settlement.
 
 ```
 type PaymentPhaseInput = {
@@ -338,7 +378,7 @@ SPL token transfer on Solana.
 **Procedure.**
 
 1. Resolve rail; verify `asset.kind == "spl"`.
-2. Construct an SPL Transfer instruction (or TransferChecked for decimal safety); the payee’s token account is the destination (must exist or be created).
+2. Construct an SPL Transfer instruction, or TransferChecked for decimal safety; the payee’s token account is the destination (must exist or be created).
 3. Submit via the payer’s wallet.
 4. Wait for confirmation per `rail.parameters.commitmentLevel` (default `"confirmed"`).
 5. Construct SettlementEvidence with `txRef` of kind `solana`; anchor via SR-2; return success.
@@ -365,26 +405,42 @@ Atomic cross-chain settlement using HTLC contracts on source and destination cha
 
 1. the **payer** (preimage holder) locks the **source** — `source.lock(payeeAddr, amount, hashlock_source, timelock_source)`, refund → payer;
 2. after source-lock finality (HTLC-8) the **payee** locks the **destination** — `dest.lock(payerAddr, amount, hashlock_dest, timelock_dest)`, refund → payee, with `timelock_source > timelock_dest` (HTLC-7);
-3. the **payer claims the destination** (`dest.claim(preimage)`), which pays the payer and reveals the preimage — the payer SHOULD have enough margin to reach destination finality before `expiry_dest`, else SHOULD decline to reveal and let both legs refund (HTLC-10);
+3. the **payer claims the destination** (`dest.claim(preimage)`), which pays the payer and reveals the preimage. The payer SHOULD have enough margin to reach destination finality before `expiry_dest`; otherwise it SHOULD decline to reveal and let both legs refund (HTLC-10);
 4. the **payee claims the source** against the now-public preimage.
 
-*txRefs:* `htlc-lock` (source), `htlc-reveal` (payer's destination claim), `htlc-claim` (payee's source claim — the decisive success tx). `outcome: "success"` is set ONLY once the payee's source claim reaches **source-chain finality** (not mere inclusion); before that the state is the HTLC-9 asymmetric `dest-revealed-source-unclaimed` failure. Construct SettlementEvidence and anchor via SR-2 — or, if SR-2 is unavailable once the source claim is final, return `ok: true` with the foreign-chain txRefs plus a durable idempotent anchor-retry (PC-7; never `errorClass: "substrate"`).
+*txRefs:*
 
-*Rationale (non-normative):* this is the canonical atomic-swap order — the secret-holding payer claims the shorter-timelock destination first so the payee keeps a guaranteed window on the longer-timelock source (HTLC-7). The payer never *claims* the source; it is the payee's to claim, and the payer recovers its source position only via refund if the swap does not complete.
+| txRef | What it is |
+| --- | --- |
+| `htlc-lock` | source lock |
+| `htlc-reveal` | payer's destination claim (reveals the preimage) |
+| `htlc-claim` | payee's source claim — the decisive success tx |
+
+- `outcome: "success"` is set ONLY once the payee's source claim reaches **source-chain finality**, not mere inclusion. Before that, the state is the HTLC-9 asymmetric `dest-revealed-source-unclaimed` failure.
+- Construct SettlementEvidence and anchor via SR-2. If SR-2 is unavailable once the source claim is final, return `ok: true` with the foreign-chain txRefs plus a durable idempotent anchor-retry (PC-7; never `errorClass: "substrate"`).
+
+> **Note (non-normative).** This is the canonical atomic-swap order: the secret-holding payer claims the shorter-timelock destination first, so the payee keeps a guaranteed window on the longer-timelock source (HTLC-7). The payer never *claims* the source — it is the payee's to claim, and the payer recovers its source position only via refund if the swap does not complete.
+
 **buyerSalt entropy & lifecycle (normative).**
 
 - (HTLC-1) buyerSalt MUST be generated from a cryptographically-secure random source with ≥128 bits of entropy.
 - (HTLC-2) buyerSalt MUST NOT be disclosed to any party but the payer while either leg is live (until both legs are claimed or refunded). It is never revealed on-chain — the destination claim reveals the *preimage*, not the salt.
 - (HTLC-3) buyerSalt MUST NOT be reused across sessions; each jobId uses a freshly-generated salt.
 - (HTLC-4) The payer MUST retain buyerSalt until the destination-side claim reaches finality (loss makes the preimage unrecoverable — a fund-safety requirement, not merely operational).
-- (HTLC-5) **Preimage derivation** MUST use HKDF (RFC 5869, sha256): IKM=buyerSalt, salt=jobId, info=agreementHash; weaker derivations MUST NOT be used. jobId MUST be globally unique per swap and agreementHash MUST be collision-resistant (both hold in DACS — jobId is per-session, agreementHash is the sha256 of the canonical agreement).
-- (HTLC-6) **Hashlock** is the chain-native hash of the preimage; source and destination chains MAY use different hash functions (keccak256 EVM, sha256 Solana/BTC, blake2b Cosmos) and MUST NOT be required to share one. The preimage is the only cross-chain-shared value; the preimage revealed on the destination is bit-identical to the one producing `hashlock_source`.
-- (HTLC-7) **Timelock asymmetry.** Implementations MUST reject a route unless `expiry_source > expiry_dest + source_finality + safety` on absolute expiry instants — the binding constraint is the payee *finalising* its source claim after the reveal, so the margin is sized to **source** finality, not destination latency. `source_finality` and `safety` are pinned rail parameters (`rail.parameters.sourceFinalitySec`, REQUIRED; `rail.parameters.safetyWindowSec`, REQUIRED, default 600s) and the inequality MUST be evaluated against the pinned values, not runtime-estimated latency.
+- (HTLC-5) **Preimage derivation** MUST use HKDF (RFC 5869, sha256): IKM=buyerSalt, salt=jobId, info=agreementHash. Weaker derivations MUST NOT be used. jobId MUST be globally unique per swap and agreementHash MUST be collision-resistant; both hold in DACS, where jobId is per-session and agreementHash is the sha256 of the canonical agreement.
+- (HTLC-6) **Hashlock** is the chain-native hash of the preimage. Source and destination chains MAY use different hash functions (keccak256 EVM, sha256 Solana/BTC, blake2b Cosmos) and MUST NOT be required to share one. The preimage is the only cross-chain-shared value; the preimage revealed on the destination is bit-identical to the one producing `hashlock_source`.
+- (HTLC-7) **Timelock asymmetry.** Implementations MUST reject a route unless `expiry_source > expiry_dest + source_finality + safety`, evaluated on absolute expiry instants. The margin is sized to **source** finality, not destination latency: the binding constraint is the payee *finalising* its source claim after the reveal. `source_finality` and `safety` are the pinned rail parameters `rail.parameters.sourceFinalitySec` and `rail.parameters.safetyWindowSec`; both are REQUIRED, and `safetyWindowSec` defaults to 600s. The inequality MUST be evaluated against the pinned values, not runtime-estimated latency.
 - (HTLC-8) **Timelock epoch.** Timelocks are durations measured from when each lock is mined. The destination lock MUST NOT be mined before source-lock finality; implementations MUST reject any schedule that could. With this anchoring, the HTLC-7 duration inequality implies the absolute-expiry inequality.
-- (HTLC-10) **Free-option disclosure.** The asymmetry guarantees liveness but not freedom from the inherent HTLC free option (the payer MAY decline to reveal after observing market movement, at zero cost, while the payee's destination capital stays locked to the destination timelock). v0.1 does NOT standardise an anti-option mechanism; listings sensitive to option abuse SHOULD prefer pay-cross-chain-liquidity-tank or require a payer stake.
+- (HTLC-10) **Free-option disclosure.** The asymmetry guarantees liveness but not freedom from the inherent HTLC free option. The payer MAY decline to reveal after observing market movement, at zero cost, while the payee's destination capital stays locked to the destination timelock. v0.1 does NOT standardise an anti-option mechanism. Listings sensitive to option abuse SHOULD prefer pay-cross-chain-liquidity-tank or require a payer stake.
 
-*Rationale (non-normative):* HTLC-2 — disclosing the salt mid-swap lets an adversary recompute the preimage and claim whichever leg pays the submitter (the HTLC-7 race); there is no safe mid-swap disclosure point. HTLC-5 — the derivation is deterministic so a disputing party can re-derive and prove the preimage from buyerSalt (serving the DACS-X correction path); a repeated (salt, jobId, agreementHash) tuple would reproduce a preimage and let an observer of the first reveal claim the second swap. HTLC-7 — a slow-source/fast-destination route is the failure case; "≥2× source-chain P99 latency" is how a rail author SHOULD *size* `sourceFinalitySec`, not a runtime input. HTLC-10 — the free option is inherent to HTLC atomic swaps; a payee MAY record payer-abandoned-leg patterns via DACS-5.
-**Reference-implementation status.** The reference (agent-commerce-demo, ~929 LOC) runs HTLC for fx-rfq cross-chain settlement (a real Solana Anchor program + Base Sepolia EVM HTLC contract; lock/reveal/refund end-to-end) and will migrate to pay-cross-chain-liquidity-tank as Native Bridges Phase 1 stabilises. Two app-layer conformance items remain (no on-chain contract or SDK change): (i) **reveal order** — it has the seller claim the source first rather than the canonical payer-claims-destination-first order (the canonical order removes a payer-loss risk if the payer goes offline after handover); (ii) **preimage generation** uses a plain CSPRNG rather than the HTLC-5 HKDF derivation.
+> **Note (non-normative).**
+> - HTLC-2 — disclosing the salt mid-swap lets an adversary recompute the preimage and claim whichever leg pays the submitter (the HTLC-7 race); there is no safe mid-swap disclosure point.
+> - HTLC-5 — the derivation is deterministic, so a disputing party can re-derive and prove the preimage from buyerSalt (serving the DACS-X correction path). A repeated (salt, jobId, agreementHash) tuple would reproduce a preimage and let an observer of the first reveal claim the second swap.
+> - HTLC-7 — a slow-source/fast-destination route is the failure case. "≥2× source-chain P99 latency" is how a rail author SHOULD *size* `sourceFinalitySec`, not a runtime input.
+> - HTLC-10 — the free option is inherent to HTLC atomic swaps; a payee MAY record payer-abandoned-leg patterns via DACS-5.
+
+> **Note (non-normative) — reference-implementation status.** The reference (agent-commerce-demo, ~929 LOC) runs HTLC for fx-rfq cross-chain settlement (a real Solana Anchor program + Base Sepolia EVM HTLC contract; lock/reveal/refund end-to-end) and will migrate to pay-cross-chain-liquidity-tank as Native Bridges Phase 1 stabilises. Two app-layer conformance items remain, with no on-chain contract or SDK change: (i) **reveal order** — it has the seller claim the source first rather than the canonical payer-claims-destination-first order, which removes a payer-loss risk if the payer goes offline after handover; (ii) **preimage generation** uses a plain CSPRNG rather than the HTLC-5 HKDF derivation.
+
 **Failure modes.**
 
 - source lock fails → `permanent` (no funds at risk)
@@ -392,19 +448,19 @@ Atomic cross-chain settlement using HTLC contracts on source and destination cha
 - destination timeout (payer never claims, preimage never revealed) → both legs refund; `settlement-atomicity`, benign
 - preimage revealed but payee's source claim not landed → `settlement-atomicity`, **non-refundable asymmetric state** (refunding the source would double-dip at the payee's expense; the source MUST NOT be refunded — see HTLC-9)
 
-**Asymmetric-settlement evidence (normative). (HTLC-9)** The "preimage revealed but the payee's source-side claim has not landed" branch differs materially from a destination-timeout: here the **payer** has already received value on the destination (its claim succeeded, the preimage is public) while the **payee's** source claim has not landed. Refunding the source would return funds to the already-paid payer — double-dipping at the payee's expense — **so this state MUST NOT be modelled as a `refund` / `partial-refund` amendment.**
+**Asymmetric-settlement evidence (normative). (HTLC-9)** The "preimage revealed but the payee's source-side claim has not landed" branch differs materially from a destination-timeout. Here the **payer** has already received value on the destination — its claim succeeded and the preimage is public — while the **payee's** source claim has not landed. Refunding the source would return funds to the already-paid payer, double-dipping at the payee's expense. **This state MUST NOT be modelled as a `refund` / `partial-refund` amendment.**
+
+*Entering the state.* The asymmetric state MUST NOT be entered until the `htlc-reveal` reaches **destination-chain finality**. Before that, the case is the refund-eligible benign-timeout branch, and entering early would wrongly block a legitimate source refund.
 
 *Representing it* (machine-distinguishable from a benign timeout):
 
 - (a) the SettlementEvidence MUST set `outcome: "failure"` with a structured `reason` marker (RECOMMENDED `dest-revealed-source-unclaimed`);
 - (b) `paymentTxRefs` MUST include the `htlc-reveal` txRef proving the preimage was revealed on the destination chain.
 
-The asymmetric state MUST NOT be entered until the `htlc-reveal` reaches **destination-chain finality** — before that the case is the refund-eligible benign-timeout branch, and entering early would wrongly block a legitimate source refund.
+*Resolution.* The open state is the non-terminal `settle-asymmetric` session state (§10.3.1, ST-8), not a terminal failure. The orchestrator watches for the payee's source claim until `expiry_source` (HTLC-7/HTLC-8):
 
-*Resolution* — the open state is the non-terminal `settle-asymmetric` session state (§10.3.1, ST-8), not a terminal failure: the orchestrator watches for the payee's source claim until `expiry_source` (HTLC-7/HTLC-8).
-
-- **Resolved** — if `htlc-claim` reaches **source-chain finality** within that window (not mere inclusion — a not-yet-final claim that later reorgs MUST NOT be read as success), the phase returns `ok: true` and anchors a superseding `outcome: "success"` record carrying `settlementFinality`, `paymentAmount` (§9.7), the full `htlc-lock` + `htlc-reveal` + `htlc-claim` set, and `supersedesEvidenceRef` → the interim failure record; the orchestrator then resumes remaining settle-stage phases (PIPE-3/PIPE-4) to `settle-completed` → terminal `completed`.
-- **Expired** — if `expiry_source` passes with no final source claim, the interim failure record stands and the session goes terminal `settle-failed` → `failed-counterparty` (the genuine unresolved loss, which DACS-X dispute may later address).
+- **Resolved** — `htlc-claim` reaches **source-chain finality** within that window. Mere inclusion is not enough: a not-yet-final claim that later reorgs MUST NOT be read as success. The phase returns `ok: true` and anchors a superseding `outcome: "success"` record carrying `settlementFinality`, `paymentAmount` (§9.7), the full `htlc-lock` + `htlc-reveal` + `htlc-claim` set, and `supersedesEvidenceRef` → the interim failure record. The orchestrator then resumes remaining settle-stage phases (PIPE-3/PIPE-4) to `settle-completed` → terminal `completed`.
+- **Expired** — `expiry_source` passes with no final source claim. The interim failure record stands and the session goes terminal `settle-failed` → `failed-counterparty`: the genuine unresolved loss, which DACS-X dispute may later address.
 
 No `correction` amendment is used — the ST-8 forward resolution produces a normal `completed` bundle DACS-5 reads directly. DACS-5 weights a window-expired asymmetric loss strictly worse than a clean destination-timeout refund.
 
@@ -417,19 +473,31 @@ Substrate-coordinated atomic settlement using pre-funded liquidity primitives. O
 1. Resolve rail; verify `asset.kind == "stablecoin-cross-chain"` and `network.kind == "cross-chain"` with `mechanism: "liquidity-tank"`.
 2. Select `liquidityTankIds` matching `(sourceChainId, destChainId)`; validate the route is in v0.1 supported scope (today: ETH Sepolia → Polygon Amoy, USDC, unidirectional).
 3. Call the substrate’s native bridge API — on Demos, construct a BridgeOperation conforming to `kynesyslabs/sdks/src/bridge/nativeBridgeTypes.ts` (originChainType, destinationChainType, originAddress, destinationAddress, originAmount, originAsset, destinationAsset); submit via `demos.bridge.submitBridgeOperation(…)`.
-4. The substrate’s validator shard executes lock-on-source and release-on-dest atomically (within the substrate’s consensus epoch); record the `bridge_id` (the 16-char hash that is the canonical end-to-end tracking handle).
+4. The substrate’s validator shard executes lock-on-source and release-on-dest atomically, within the substrate’s consensus epoch. Record the `bridge_id` — the 16-char hash that is the canonical end-to-end tracking handle.
 5. Wait for `BridgeOperation.status` to transition `"empty"` → `"pending"` → `"completed"`.
-6. Construct SettlementEvidence with `txRef` of kind `liquidity-tank` including bridgeId + both lock and release tx hashes; anchor via SR-2; return success (or, once the bridge has reached `completed` but SR-2 is unavailable, return `ok: true` with the bridge txRefs plus a durable idempotent anchor-retry, per PC-7 — never `errorClass: "substrate"`).
+6. Construct SettlementEvidence with `txRef` of kind `liquidity-tank` including bridgeId + both lock and release tx hashes; anchor via SR-2; return success. If the bridge has reached `completed` but SR-2 is unavailable, return `ok: true` with the bridge txRefs plus a durable idempotent anchor-retry, per PC-7 — never `errorClass: "substrate"`.
 
-**Trust model.** On Demos, Liquidity Tanks are operated by a rotating Demos validator shard under 2/3 BFT multisig with a 15-day deployer emergency-recovery path. This is "the operator is the substrate itself", not "no operator". The tank contracts (LiquidityTank.sol) are audited (600+ lines) and deployed to ETH Sepolia (0x7AE3A8B899BE0D9E9de51b81a9912C0CEE128d88) and Polygon Amoy (0x57cA16EeE7fbeC69BFD46E4806B5d91e173dd600). Other substrates implementing SR-5 via different mechanisms inherit their own substrate trust model; recipes referencing this rail MUST be evaluated against the relevant substrate’s security profile.
+**Trust model.** Recipes referencing this rail MUST be evaluated against the relevant substrate’s security profile. On Demos, Liquidity Tanks are operated by a rotating Demos validator shard under 2/3 BFT multisig with a 15-day deployer emergency-recovery path. This is "the operator is the substrate itself", not "no operator". Other substrates implementing SR-5 via different mechanisms inherit their own substrate trust model.
+
+> **Note (non-normative).** The tank contracts (LiquidityTank.sol, 600+ lines, audited) are deployed to ETH Sepolia (`0x7AE3A8B899BE0D9E9de51b81a9912C0CEE128d88`) and Polygon Amoy (`0x57cA16EeE7fbeC69BFD46E4806B5d91e173dd600`).
+
 **Failure modes.**
 
 - tank insufficiency on dest → `transient` (retry after re-balancing)
-- source-lock succeeds but substrate epoch interruption prevents dest-release → **`substrate`** (the dest-release is blocked by a substrate condition, not a counterparty fault; substrate-native recovery applies per SR-5 implementation — on Demos the 15-day emergency recovery is the backstop — and it resolves via ST-7 pause/resume, mapping to reputation-neutral `failed-substrate` on pause-timeout, NEVER `failed-counterparty`, since neither party is at fault for a substrate-recoverable lock)
+- source-lock succeeds but substrate epoch interruption prevents dest-release → **`substrate`**. The dest-release is blocked by a substrate condition, not a counterparty fault; substrate-native recovery applies per the SR-5 implementation (on Demos, the 15-day emergency recovery is the backstop). It resolves via ST-7 pause/resume, mapping to reputation-neutral `failed-substrate` on pause-timeout — NEVER `failed-counterparty`, since neither party is at fault for a substrate-recoverable lock.
 - `BridgeOperation.status == "failed"` → `permanent` (deterministic rejection by tank shard)
 
-**No mechanism substitution (normative).** The pinned rail's mechanism is binding. On tank insufficiency or capacity exhaustion the orchestrator MUST retry the pinned tank rail (transient) or fail the phase — it MUST NOT silently fall through to a different mechanism (e.g. `pay-cross-chain-htlc`). The produced `txRef.kind` MUST match the pinned rail (§9.14); a phase whose executed mechanism differs from the pinned rail MUST fail with errorClass: permanent. Silent substitution would violate the §9.13 pinned-rail rule and break the one-to-one phase↔txRef-kind correspondence. An implementation wanting HTLC fallback MUST express it as a distinct pinned rail / phase, not an implicit fallthrough.
-**Evidence scope (v0.1).** Tank SettlementEvidence is **success-only**: both `lockTxHash` and `releaseTxHash` are present when the bridge reaches `completed`. A locked-but-not-yet-released state inside the recovery window is surfaced via the settlement-atomicity failure mode above and resolved by the substrate's native recovery path; v0.1 does **not** define a distinct *recovery-pending* evidence marker or state to machine-distinguish a recoverable lock from a terminal loss. A recovery-pending marker (a `recoveryDeadline` field and/or a settle-recovery-pending state, analogous to HTLC-9's open-state handling) is a roadmap item.
+**No mechanism substitution (normative).** The pinned rail's mechanism is binding:
+
+- On tank insufficiency or capacity exhaustion, the orchestrator MUST retry the pinned tank rail (transient) or fail the phase. It MUST NOT silently fall through to a different mechanism (e.g. `pay-cross-chain-htlc`).
+- The produced `txRef.kind` MUST match the pinned rail (§9.14). A phase whose executed mechanism differs from the pinned rail MUST fail with errorClass: permanent.
+- An implementation wanting HTLC fallback MUST express it as a distinct pinned rail / phase, not an implicit fallthrough.
+
+> **Note (non-normative).** Silent substitution would violate the §9.13 pinned-rail rule and break the one-to-one phase↔txRef-kind correspondence.
+
+**Evidence scope (v0.1).** Tank SettlementEvidence is **success-only**: both `lockTxHash` and `releaseTxHash` are present when the bridge reaches `completed`. A locked-but-not-yet-released state inside the recovery window is surfaced via the settlement-atomicity failure mode above and resolved by the substrate's native recovery path. v0.1 does **not** define a distinct *recovery-pending* evidence marker or state to machine-distinguish a recoverable lock from a terminal loss.
+
+> **Note (non-normative).** A recovery-pending marker — a `recoveryDeadline` field and/or a settle-recovery-pending state, analogous to HTLC-9's open-state handling — is a roadmap item.
 
 #### 9.5.6 pay-ap2
 
@@ -441,7 +509,7 @@ Payment via an AP2 mandate to a card network or banking provider.
 2. Construct an AP2 PaymentMandate conforming to the FIDO Alliance AP2 spec (April 2026 onwards).
 3. The payer’s AP2-compatible wallet authorises the mandate.
 4. Submit the mandate to `rail.network.providerEndpoint`; receive a payment receipt and provider-side reference (e.g. Visa Direct payment id, Stripe PaymentIntent id).
-5. Construct SettlementEvidence with `txRef` of kind `ap2` carrying mandateId, providerRef, and the AP2 `protocolVersion` (the wire version that produced the mandate/receipt, so historical evidence is re-validatable against the rules of its era — #27); anchor via SR-2; return success.
+5. Construct SettlementEvidence with `txRef` of kind `ap2` carrying mandateId, providerRef, and the AP2 `protocolVersion` — the wire version that produced the mandate/receipt, so historical evidence is re-validatable against the rules of its era (#27). Anchor via SR-2; return success.
 
 **Failure modes.**
 
@@ -459,10 +527,17 @@ Payment via x402 HTTP 402 micropayment to an HTTP resource.
 1. Resolve rail; verify `network.kind == "x402-resource"`.
 2. Construct an x402 payment payload (signed authorisation per x402 spec); submit the GET request to the resource with x402 headers.
 3. Receive the resource response and an x402 receipt; read the on-chain settlement transaction hash from the x402 `PAYMENT-RESPONSE` header (x402 settles a gasless USDC transfer on its settlement chain, e.g. Base).
-4. Construct SettlementEvidence with `txRef` of kind `x402` carrying httpResource, paymentReceiptHash (sha256 of the receipt), the x402 `protocolVersion` (#27), and — whenever the facilitator returns it (the normal case) — the on-chain `settlementTxHash` + `chainId`. A record carrying `settlementTxHash`/`chainId` is **chain-verifiable directly against the settlement chain, exactly like the `evm` rail** — the primary audit path; the receipt hash is supplementary. The handler MUST populate `settlementTxHash`/`chainId` when the facilitator returns them.
+4. Construct SettlementEvidence with `txRef` of kind `x402` carrying httpResource, paymentReceiptHash (sha256 of the receipt), and the x402 `protocolVersion` (#27). The handler MUST populate `settlementTxHash` + `chainId` whenever the facilitator returns them — the normal case. A record carrying `settlementTxHash`/`chainId` is **chain-verifiable directly against the settlement chain, exactly like the `evm` rail**: the primary audit path, with the receipt hash supplementary.
 5. Anchor via SR-2; return success.
 
-**What pay-x402 adds beyond bare x402.** A direct x402 transaction produces a receipt the client and server hold off-chain; there is no anchored audit trail and the transaction is not bound to a DACS session. pay-x402 binds the x402 transaction into a DACS session by: (a) producing a SettlementEvidence record carrying the on-chain `settlementTxHash` (chain-verifiable against the settlement chain, like the `evm` rail) plus the x402 receipt hash, anchored via SR-2 — the receipt itself remains off-chain but its hash, the settlement tx, and the protocol version become part of the on-chain bundle; (b) tying the x402 transaction to a specific DACS-3 AgreementDocument via the session’s jobId; (c) making the x402 transaction available to DACS-5 reputation derivation and ERC-8004 publication. For pure HTTP-402 use cases that do not need a session bundle, bare x402 is appropriate; pay-x402 is the right wrapper when the x402 transaction participates in a multi-stage agent commerce lifecycle.
+> **Note (non-normative) — what pay-x402 adds beyond bare x402.** A direct x402 transaction produces a receipt the client and server hold off-chain; there is no anchored audit trail and the transaction is not bound to a DACS session. pay-x402 binds the x402 transaction into a DACS session by:
+>
+> - (a) producing a SettlementEvidence record carrying the on-chain `settlementTxHash` (chain-verifiable against the settlement chain, like the `evm` rail) plus the x402 receipt hash, anchored via SR-2 — the receipt itself remains off-chain, but its hash, the settlement tx, and the protocol version become part of the on-chain bundle;
+> - (b) tying the x402 transaction to a specific DACS-3 AgreementDocument via the session’s jobId;
+> - (c) making the x402 transaction available to DACS-5 reputation derivation and ERC-8004 publication.
+>
+> For pure HTTP-402 use cases that do not need a session bundle, bare x402 is appropriate; pay-x402 is the right wrapper when the x402 transaction participates in a multi-stage agent commerce lifecycle.
+
 **Failure modes.**
 
 - server-side x402 endpoint rejects (insufficient payment, unsupported scheme) → `counterparty`

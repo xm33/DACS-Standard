@@ -190,3 +190,34 @@ Full pass (read-through + ≥110-word sweep in one go, since this module was unr
 - PL fixes belong to the plain-language pass on abstracts/motivation/rationale.
 - SC fixes are structure-only on normative prose — run them through the rule-ID + validator gate (no rule text altered).
 - Append new finds as `#N | location | PL/SC | issue | fix | open` while reading.
+
+## SPEC-STYLE pilot — DACS-4 §9.4–§9.5 two-voice rewrite (2026-06-10, spec-style-pilot branch)
+
+A third category beyond PL/SC: **meaning-preserving rewording** (not verbatim) under the new
+SPEC-STYLE.md conventions. First applied as a pilot to DACS-4 §9.4–§9.5.
+
+**What changed:** rule text separated from `> **Note (non-normative).**` blocks (rationale,
+attack-it-closes, roadmap items, deployment metadata, reference-impl status → Notes); dense
+fused paragraphs split rule-per-bullet (PC-2, PC-7, RAV-R4/R5, HTLC-9, progressive anchoring,
+no-mechanism-substitution); §9.4.2 maturity bullets → table; PC-2 worked address example added;
+txRefs glosses → table. Triage rule: anything with an RFC keyword or interpretation-narrowing
+force stayed in rule text (PC-7's ST-7 carve-out and the OPTIONAL-attestationRef clause kept
+normative; trust-model MUST kept, only contract addresses demoted).
+
+**Metrics:** prose-lint findings 49 → 5 (residual = benign code-gloss parens in procedure
+steps); words 4,798 → ~4,940 (+3%: relocation + structure, not compression — the win is
+scanability, not raw length). Rule-ID census identical. Keyword deltas: +1 MUST/+1 MUST NOT
+(RAV-R5 explicit split), −1 REQUIRED (HTLC-7 per-param tags merged to "both are REQUIRED").
+
+**Cold adversarial review (independent agent):** 0 critical / 2 major / 2 minor. Majors, both
+fixed: (1) missing blank line after 3 Note blockquotes — CommonMark lazy continuation rendered
+following *normative* headers inside the non-normative callouts; (2) rewrite invented
+"`pay-cross-chain-htlc` is fully supported" (claim not in source) → reworded to "has no v0.1
+route restriction". Minors: x402 maturity-table label restored to OLD's taxonomy; **pre-existing**
+§9.4.1 `railId` "lowercase ASCII" vs registry `…:USDC` uppercase tension, now instantiated in the
+PC-2 example — follow-up issue candidate, not a rewrite defect.
+
+**Lessons for the module sweep:** (a) always blank-line after a Note block (lazy continuation
+is a normativity-boundary hazard — consider a lint check); (b) summarising prose into a tighter
+claim ("fully supported") is the prose variant of the C1 derived-table failure mode; (c) word
+count goes *up* slightly — set expectations on scanability metrics, not length.

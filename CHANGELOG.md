@@ -17,6 +17,10 @@ The format used per release:
 
 Defect-triage and follow-on hardening on top of v0.1 (steward-merged via the issue triage of the cX3po review wave and the xm33 / DACS-X contributions).
 
+### Editorial
+
+- **DACS-4 §9.4–§9.5 two-voice readability rewrite (pilot)** — normative rule text separated from non-normative `Note` blocks per the new [SPEC-STYLE](SPEC-STYLE.md) conventions; rationale, roadmap items, and deployment metadata moved to Notes; dense paragraphs split into rule-per-bullet structure; worked PC-2 address example added. **No normative change intended**; verified by the SPEC-STYLE protocol (rule-ID census identical; keyword deltas limited to one documented RAV-R5 MUST/MUST-NOT split and one HTLC-7 REQUIRED-tag merge; all validators and tests green; independent adversarial review: 0 critical findings). Introduces `SPEC-STYLE.md` and `scripts/prose_lint.py`.
+
 ### Added
 
 - **`SettlementFinalityRecord` on SettlementEvidence** (§9.7, PC-6, §14.4) — payment evidence now records *how firmly* a payment was confirmed (`model`: block-depth / commitment-level / provider-receipt / htlc-reveal / liquidity-tank, plus the `finalityBlocks` / `finalityCommitmentLevel` actually applied and `finalityObservedAt`), echoed from rail params so the record is self-describing; required on success-outcome payment evidence, absent on delivery evidence. Promotes a ROADMAP candidate into v0.1 (#109, pallytin88).
