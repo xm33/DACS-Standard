@@ -7,28 +7,44 @@
 ## About this document
 
 This document specifies DACS — the Demos Agent Commerce Standards — across five per-stage standards: DACS-1 (Identify), DACS-2 (Vet), DACS-3 (Negotiate), DACS-4 (Settle), and DACS-5 (Verify). Shared material (terminology, substrate capabilities, the Demos production mapping, references) is presented once in the front and back matter rather than repeated per chapter. Each per-stage chapter contains the material specific to that stage. The companion DACS Dev Tasks working document is published separately and is **not** part of the standards.
+
+<!-- prose-lint: allow reason="RFC-2119 boilerplate necessarily enumerates the keywords" -->
 **Normative language.** This document uses the RFC 2119 / RFC 8174 keywords **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL**, interpreted as in those RFCs. Keywords are normative only when in uppercase.
+
 **Section numbering.** The front matter is numbered §1–§5 (prose introduction) followed by three lettered cross-cutting reference sections — **§A Demos production mapping**, **§B Global terminology** (claim references, anchoring/signing, shared phase-handler types, the closed registries, and the universal signature scheme §B.7), and **§C Composed open standards**. The five per-stage standards are then **Chapters 6–10** (DACS-1..5), with back matter in **Chapters 11–14**. The lettering of §A–§C deliberately keeps the foundational reference sections out of the chapters' §6/§7/§8 numbering namespace, so a citation such as §B.7 (the universal signature scheme) versus §7.7 (the DACS-2 composite verification record) is unambiguous.
-**Versioning.** This document is **DACS v0.1**, the first publicly released version. Earlier drafts circulated internally under per-stage version numbers (DACS-1..5 v0.1, paper v0.7) and a brief v0.8 cut that consolidated review-pass revisions; those numbers are retired and reset to a common baseline. v0.1 is that baseline: all five per-stage standards plus the front-matter substrate-binding, the threat model, the glossary, and the conformance plan are published together at v0.1. From this baseline onward, each per-stage standard versions independently — a standard that gains capabilities bumps its own minor version (v0.2, v0.3, …) without forcing the others — through to v1.0, the version at which a standard is considered ready for unsupervised production use.
+
+**Versioning.** This document is **DACS v0.1**, the first publicly released version. v0.1 is a common baseline: all five per-stage standards plus the front-matter substrate-binding, the threat model, the glossary, and the conformance plan are published together at v0.1. From this baseline onward, each per-stage standard versions independently — a standard that gains capabilities bumps its own minor version (v0.2, v0.3, …) without forcing the others, through to v1.0 — the version at which a standard is considered ready for unsupervised production use.
+
+> **Note (non-normative).** Earlier drafts circulated internally under per-stage version numbers (DACS-1..5 v0.1, paper v0.7) and a brief v0.8 cut that consolidated review-pass revisions; those numbers are retired and reset to the common v0.1 baseline.
 
 ## Abstract
 
 Autonomous agents are transacting with agents they have never met. Open standards exist for fragments of what a transaction requires — identity registries, payment authorisation, HTTP-layer micropayments, capability discovery — but each addresses one slice of the problem. Nothing in widespread use composes the fragments into a working commerce lifecycle, which is why agents that need the full lifecycle today fall back to closed operator marketplaces.
+
 **DACS — Demos Agent Commerce Standards** — is the protocol Demos uses for agent commerce. It is organised around the five stages every agent-to-agent transaction passes through: **Identify, Vet, Negotiate, Settle, Verify.** For each stage, DACS composes with the existing standards that already work and adds new standards where the open ecosystem has gaps. Each new standard names the substrate capability it depends on. DACS is built for the Demos Network, but the capability-level specification is kept clean of Demos-specific dependencies so a substrate that provides the same capabilities can host a compatible implementation.
 
 This document is the **normative reference** (Core + the five stage modules). A non-normative overview — the five-stage lifecycle, the nine-artifact spine, and a worked end-to-end example — is in the [Primer](../PRIMER.md); read it first if you are new to DACS.
 
 ## 1. The problem
 
-An agent transacting with another agent today chooses between **pre-integrated bilateral trust** (works for small ecosystems, breaks at scale), a **closed operator marketplace** (scales, but the operator captures rents, controls access, and becomes a single point of trust), or **open standards** (the only path that scales without conceding a marketplace position — but only if a *complete lifecycle* exists). Today the open standards cover stages, not the lifecycle: a buyer can discover a seller, recognise its identity, and authorise a payment, but cannot, with open standards alone, (a) declare and verify a stakes-appropriate bundle of identity claims, (b) negotiate terms in private, or (c) produce an end-to-end session record the participants own. These gaps map to four of the five stages and are why institutional and regulated agents still fall back to operator marketplaces. DACS provides the lifecycle on a public, permissionless substrate — composing the standards that already work and filling the gaps that remain.
+An agent transacting with another agent today chooses between three options:
+
+- **Pre-integrated bilateral trust** — works for small ecosystems, breaks at scale.
+- **A closed operator marketplace** — scales, but the operator captures rents, controls access, and becomes a single point of trust.
+- **Open standards** — the only path that scales without conceding a marketplace position, but only if a *complete lifecycle* exists.
+
+Today the open standards cover stages, not the lifecycle. A buyer can discover a seller, recognise its identity, and authorise a payment. But with open standards alone it cannot (a) declare and verify a stakes-appropriate bundle of identity claims, (b) negotiate terms in private, or (c) produce an end-to-end session record the participants own. These gaps map to four of the five stages and are why institutional and regulated agents still fall back to operator marketplaces. DACS provides the lifecycle on a public, permissionless substrate — composing the standards that already work and filling the gaps that remain.
 
 *The [Primer](../PRIMER.md) gives the full motivation (including why this matters now, and how DACS relates to AP2, x402, ERC-8004, ERC-8183, and A2A) plus a worked end-to-end example.*
 
 ## 2. The approach
 
 DACS follows three principles.
+
 **Composition.** Identity, payment, and several forms of credential attestation already have working standards with real adoption. There is no value in replacing them, and reinventing them slows everyone down. DACS uses composition, not replacement.
+
 **Gap-filling.** Where there are real gaps, DACS specifies a new standard. New standards stay narrow in scope and are designed to compose cleanly with the rest of the stack.
+
 **Stated substrate requirements.** Each new DACS standard names the substrate capability it depends on. The capability is the requirement, stated in the spec. Which substrate provides it is operational detail. This keeps DACS substrate-agnostic in specification while staying honest about what the new standards actually need underneath.
 Three things follow:
 
@@ -85,12 +101,20 @@ Every DACS standard names the substrate capability it depends on. The capabiliti
 | SR-5 | Multi-chain coordinated atomic settlement | Atomic settlement across substrates. May be provided by substrate-native cross-chain transactions, HTLC contracts on participating chains, or pre-funded liquidity primitives such as Liquidity Tanks on Demos. | DACS-4 (cross-chain settlement only) |
 
 A substrate shipping all five can host a full DACS implementation. A substrate that ships some subset can host DACS partially: listings whose pipelines require unsupported capabilities are unfulfillable there, but the rest of the stack still works.
-**Substrate-coupling status in v0.1.** SR-1, SR-2, and SR-5 are specified at the protocol level: another substrate that ships an equivalent primitive (cross-substrate identity aggregation; content-addressed anchored storage; atomic cross-chain settlement) can interoperate with DACS implementations on Demos at the artifact level (the bundles, listings, evidence records validate the same way). **SR-3 and SR-4 are specified at the trust-property level only in v0.1.** Two substrates each shipping their own SR-3 (consensus-backed proxy attestation) or SR-4 (identity-keyed private coordination) implementations will *not* be wire-protocol interoperable; the trust properties listed under CH-1..CH-6 for SR-4 and under §7.3.5 for SR-3 are the conformance bar v0.1 requires, but the underlying message formats and consensus signatures are substrate-specific. v2 of DACS-2 and DACS-3 is expected to specify wire formats for SR-3 attestation envelopes and SR-4 channel messages that enable cross-substrate interoperability; until then, a session begun on substrate A cannot be completed on substrate B if it uses any SR-3- or SR-4-dependent phase.
+
+**Substrate-coupling status in v0.1.**
+
+- **SR-1, SR-2, and SR-5 are specified at the protocol level.** Another substrate that ships an equivalent primitive (cross-substrate identity aggregation; content-addressed anchored storage; atomic cross-chain settlement) can interoperate with DACS implementations on Demos at the artifact level: the bundles, listings, and evidence records validate the same way.
+- **SR-3 and SR-4 are specified at the trust-property level only in v0.1.** Two substrates each shipping their own SR-3 (consensus-backed proxy attestation) or SR-4 (identity-keyed private coordination) implementations will *not* be wire-protocol interoperable. The trust properties listed under CH-1..CH-6 for SR-4 and under §7.3.5 for SR-3 are the conformance bar v0.1 requires; the underlying message formats and consensus signatures are substrate-specific. Consequence, until the v2 wire formats ship (see note below): a session begun on substrate A cannot be completed on substrate B if it uses any SR-3- or SR-4-dependent phase.
+
+> **Note (non-normative).** v2 of DACS-2 and DACS-3 is expected to specify wire formats for SR-3 attestation envelopes and SR-4 channel messages that enable cross-substrate interoperability.
+
 **Reference substrate.** The **Demos Network** is the substrate against which DACS was designed and, as of this draft, the only substrate that ships all five capabilities natively. The DACS specifications cite the substrate capabilities (SR-1 through SR-5), not the Demos primitives themselves; this separation keeps the artifact-level specification portable while staying honest about which primitives are concretely realised today and where v2 work is needed.
 
 ## A. Demos production mapping
 
 A mapping of which substrate primitives are live today, what extensions are needed for v0.1, and which dependencies are third-party. The mapping applies to every per-stage standard — DACS-1 through DACS-5 — in this paper.
+
 **Legend.** 🟢 in production today; 🟡 Demos team to add for v0.1; 🔵 third-party (composed, not built by Demos). This legend describes the substrate-primitive status — what the chain ships. Per-recipe and per-rail operational status uses the normative availability field defined in §7.4.5 (recipes) and §9.4.4 (rails). The legend here is informative about substrate features; availability there is normative about specific attestation paths and settlement rails. Earlier drafts conflated the two surfaces by extending this legend to recipes and rails; that conflation has been corrected in v0.1.
 
 ### A.1 SR-1 — Cross-Context Identities (CCI)
@@ -157,18 +181,31 @@ Terms used in more than one per-stage chapter are defined here once. Per-stage c
 - **Primary identity claim.** The claim within a bundle that serves as the canonical identifier of the party for reputation, audit, and addressing purposes. Determined by the presentedBy field of the bundle and the primaryClaimSelector of the requirement.
 - **Identity bundle.** An ordered set of claims a party presents about itself, each independently verifiable, plus a presentation signature. Full schema in chapter 6 (DACS-1).
 
-**Canonical form and identity (rules CF-2, CF-3).** A ClaimReference has two distinct canonical forms — a *canonical byte form* (**the bytes embedded** whenever the reference appears inside a hashed or signed document, so the JCS canonical form is reproducible) and a *canonical identity* (**the value compared** for matching, reputation keying, and the §7.3.2 cross-session replay defence):
+**Canonical form and identity (rules CF-2, CF-3).** A ClaimReference has two distinct canonical forms. The *canonical byte form* is **the bytes embedded** whenever the reference appears inside a hashed or signed document, so the JCS canonical form is reproducible. The *canonical identity* is **the value compared** for matching, reputation keying, and the §7.3.2 cross-session replay defence:
 
-- (CF-2) **Canonical byte form.** Before a ClaimReference is embedded in any document that is JCS-canonicalised, hashed, signed, or compared, it MUST be in canonical form: (a) **Scheme** lowercased — this promotes the SHOULD-emit-lowercase scheme rule (§6.3.1) to a MUST for any reference that is hashed, signed, or compared; (b) **Identifier** NFC-normalised (rule CF-1, §B.2) and otherwise per the scheme's identifier rule (§6.3.1); (c) **Parameters**, if present, sorted by key in Unicode code-point order and joined with the fixed `&`/`=` separators, with the reserved characters `:`, `?`, `&`, `=`, and `%` percent-encoded using uppercase hex (e.g. `%3A`). Sorting parameters into canonical order is NOT the "silent stripping" prohibited by the §6.3.1 forwarding rule — no parameter is dropped, only deterministically ordered.
+- (CF-2) **Canonical byte form.** Before a ClaimReference is embedded in any document that is JCS-canonicalised, hashed, signed, or compared, it MUST be in canonical form:
+  - (a) **Scheme** lowercased — this promotes the SHOULD-emit-lowercase scheme rule (§6.3.1) to a MUST for any reference that is hashed, signed, or compared;
+  - (b) **Identifier** NFC-normalised (rule CF-1, §B.2) and otherwise per the scheme's identifier rule (§6.3.1);
+  - (c) **Parameters**, if present, sorted by key in Unicode code-point order and joined with the fixed `&`/`=` separators, with the reserved characters `:`, `?`, `&`, `=`, and `%` percent-encoded using uppercase hex (e.g. `%3A`). Sorting parameters into canonical order is NOT the "silent stripping" prohibited by the §6.3.1 forwarding rule — no parameter is dropped, only deterministically ordered.
 - (CF-3) **Canonical identity.** The identity of a party for matching, reputation keying, and replay defence is the pair (canonical Scheme, canonical Identifier) **only**. Parameters are advisory qualifiers and MUST NOT contribute to identity: `cci-xm:evm:mainnet:0xA?jurisdiction=US` and `cci-xm:evm:mainnet:0xA` are the same party and MUST key to the same reputation record. Wherever this specification requires two references to match "canonically" or "by canonical scheme and identifier" (§6.3.2, §7.3.2, §6.6), it means equality of this (Scheme, Identifier) pair after CF-1/CF-2 normalisation.
 
-**Rule CF-4 (logical-address delimiter encoding).** A `dacsN:` logical address is colon-delimited, but a variable segment can itself contain the `:` delimiter (and, for a ClaimReference, also `?`, `&`, `=`): `sellerPrimaryClaim` is a ClaimReference (e.g. `cci-xm:evm:mainnet:0x1234`). (`listingId` is constrained to URL-safe ASCII per §6.3.4, so it carries no reserved delimiters to encode.) Left raw, the boundaries between segments are undecidable from the string alone, so the universal reversibility guarantee (§"Logical vs native addresses") is unsatisfiable on any substrate that parses the logical address directly. Therefore: every colon-bearing variable segment (`sellerPrimaryClaim` and the equivalent segments of derived addresses) MUST have its reserved delimiters — `:`, `?`, `&`, `=`, `%` — percent-encoded with uppercase hex **before** the address is assembled. `sellerPrimaryClaim` MUST already be in CF-2 canonical form before encoding. This is the same `%3A`-style encoding the specification already uses for `primaryClaimRef` in the discovery/catalog surface. After encoding, the only unescaped colons are the fixed structural delimiters, so a reader knowing the pattern splits on them and percent-decodes each segment back to its exact original value. Worked example — primary claim `cci-xm:evm:mainnet:0x1234`, `listingId` `my-listing`, version 3:
+**Rule CF-4 (logical-address delimiter encoding).** A `dacsN:` logical address is colon-delimited, but a variable segment can itself contain the `:` delimiter (and, for a ClaimReference, also `?`, `&`, `=`): `sellerPrimaryClaim` is a ClaimReference (e.g. `cci-xm:evm:mainnet:0x1234`). The rules:
+
+- Every colon-bearing variable segment (`sellerPrimaryClaim` and the equivalent segments of derived addresses) MUST have its reserved delimiters — `:`, `?`, `&`, `=`, `%` — percent-encoded with uppercase hex **before** the address is assembled.
+- `sellerPrimaryClaim` MUST already be in CF-2 canonical form before encoding.
+- `listingId` is constrained to URL-safe ASCII per §6.3.4, so it carries no reserved delimiters to encode.
+
+After encoding, the only unescaped colons are the fixed structural delimiters, so a reader knowing the pattern splits on them and percent-decodes each segment back to its exact original value.
+
+> **Note (non-normative).** Left raw, the boundaries between segments are undecidable from the string alone, so the universal reversibility guarantee (§"Logical vs native addresses") would be unsatisfiable on any substrate that parses the logical address directly. This is the same `%3A`-style encoding the specification already uses for `primaryClaimRef` in the discovery/catalog surface.
+
+Worked example — primary claim `cci-xm:evm:mainnet:0x1234`, `listingId` `my-listing`, version 3:
 
 ```
 logical_address := "dacs1:cci-xm%3Aevm%3Amainnet%3A0x1234:my-listing:v3"
 ```
 
-The CF-4-encoded `logical_address` is the reversibly-parseable canonical identifier. CF-4 governs only how the address *string* is written so it parses back unambiguously; how it maps to a substrate's *native* address (pure recomputation vs published write-input binding) is governed by the front-matter universal rule and, for Demos, the DACS-1 §6.3.4 Demos-binding block — CF-4 does **not** itself assert a native-address formula.
+The CF-4-encoded `logical_address` is the reversibly-parseable canonical identifier. CF-4 governs only how the address *string* is written so it parses back unambiguously — it does **not** itself assert a native-address formula. How the string maps to a substrate's *native* address (pure recomputation vs published write-input binding) is governed by the front-matter universal rule and, for Demos, the DACS-1 §6.3.4 Demos-binding block.
 
 Rule CF-4 (above) applies identically to every logical-address kind. Per address, the **variable** segments (which MUST be percent-encoded) and the **fixed structural** segments (which MUST NOT) are:
 
@@ -190,9 +227,17 @@ In every case `{jobId}` is a ULID (no reserved delimiters), `{scheme}` is a rese
 - **Signed.** Carrying an Ed25519 (or equivalent) signature over the RFC 8785 canonical-JSON serialisation of the document’s signed scope, where the signed scope is all fields except the signature field itself.
 - **Canonical form.** RFC 8785 JSON Canonicalization Scheme (JCS) serialisation of the document with the signature(s) field omitted.
 - **Content hash.** sha256 hex of the canonical form.
-- **Numeric safe-integer constraint.** RFC 8785 JCS defines a canonical serialisation only for JSON numbers within the IEEE-754 double range; integers above 2^53−1 (9,007,199,254,740,991) have no reproducible canonical form. Therefore every JSON number in a signed or content-hashed DACS document MUST lie within the IEEE-754 double safe-integer range. Any quantity that may exceed it (token IDs, uint256 values, large on-chain counters or block numbers) MUST be carried as a decimal string (or, where ABI conventions apply, a `0x`-prefixed hex string) rather than a bare JSON number, so that its canonical form and content hash are reproducible across serializers. Producers MUST NOT emit, and readers SHOULD reject, a signed or content-hashed document containing a JSON number outside this range.
-- **Unicode normalisation (rule CF-1).** RFC 8785 JCS performs no Unicode normalisation — it preserves whatever code points are present. Therefore, before computing the canonical form, every JSON string value in a signed or content-hashed DACS document MUST be Unicode-normalised to NFC. Both producers and verifiers MUST apply NFC at this stage, so the canonical form, content hash, and signatures are reproducible across implementations regardless of the input's precomposed/decomposed form. Most DACS string fields are ASCII, for which NFC is a no-op; this rule binds the non-ASCII surface (e.g. `cci-ud`, `cci-web2` usernames, `domain:` identifiers). This lifts the per-field NFC requirement on `Identifier` (§B.1, CF-2) into a single normative pre-hash step covering the whole signed scope.
-- **Canonical decimal (rule CD-1).** RFC 8785 JCS canonicalises JSON *numbers* but preserves *string* bytes verbatim — and monetary amounts are carried as strings — so two parties formatting the same economic value differently (e.g. `"1.50"` vs `"1.5"`) would otherwise produce different bytes, hashes, and signatures. Every `PriceTerm.amount` string MUST be in minimal-digit canonical decimal form: no leading zeros (except a single `0` before the decimal point); no trailing zeros after the decimal point; `.` as the only separator; no `+` sign; no exponent. Producers MUST canonicalise `amount` per CD-1 before computing any agreement hash, `SettlementEvidence` hash, or other JCS hash; verifiers MUST canonicalise `amount` per CD-1 before any price-band or price-equality comparison. Two parties formatting the same value differently MUST therefore reproduce identical canonical bytes, hashes, and signatures.
+- **Numeric safe-integer constraint.** Every JSON number in a signed or content-hashed DACS document MUST lie within the IEEE-754 double safe-integer range. Any quantity that may exceed it (token IDs, uint256 values, large on-chain counters or block numbers) MUST be carried as a decimal string — or, where ABI conventions apply, a `0x`-prefixed hex string — rather than a bare JSON number. Producers MUST NOT emit, and readers SHOULD reject, a signed or content-hashed document containing a JSON number outside this range.
+
+  > **Note (non-normative).** RFC 8785 JCS defines a canonical serialisation only for JSON numbers within the IEEE-754 double range; integers above 2^53−1 (9,007,199,254,740,991) have no reproducible canonical form. The string carriage keeps the canonical form and content hash reproducible across serializers.
+
+- **Unicode normalisation (rule CF-1).** Before computing the canonical form, every JSON string value in a signed or content-hashed DACS document MUST be Unicode-normalised to NFC. Both producers and verifiers MUST apply NFC at this stage, so the canonical form, content hash, and signatures are reproducible across implementations regardless of the input's precomposed/decomposed form. This lifts the per-field NFC requirement on `Identifier` (§B.1, CF-2) into a single normative pre-hash step covering the whole signed scope.
+
+  > **Note (non-normative).** RFC 8785 JCS performs no Unicode normalisation — it preserves whatever code points are present, hence this rule. Most DACS string fields are ASCII, for which NFC is a no-op; the rule binds the non-ASCII surface (e.g. `cci-ud`, `cci-web2` usernames, `domain:` identifiers).
+
+- **Canonical decimal (rule CD-1).** Every `PriceTerm.amount` string MUST be in minimal-digit canonical decimal form: no leading zeros (except a single `0` before the decimal point); no trailing zeros after the decimal point; `.` as the only separator; no `+` sign; no exponent. Producers MUST canonicalise `amount` per CD-1 before computing any agreement hash, `SettlementEvidence` hash, or other JCS hash. Verifiers MUST canonicalise `amount` per CD-1 before any price-band or price-equality comparison. Two parties formatting the same value differently MUST therefore reproduce identical canonical bytes, hashes, and signatures.
+
+  > **Note (non-normative).** RFC 8785 JCS canonicalises JSON *numbers* but preserves *string* bytes verbatim — and monetary amounts are carried as strings — so without CD-1 two parties formatting the same economic value differently (e.g. `"1.50"` vs `"1.5"`) would produce different bytes, hashes, and signatures.
 
 ### B.3 Verification and evidence
 
@@ -286,12 +331,31 @@ The v0.1 registry of domain separators is closed:
 | DACS-3 auto-accept commitment | "dacs-auto-accept-commitment:v1:" | §8.4.1 |
 | DACS-3 auto-accept instance | "dacs-auto-accept-instance:v1:" | §8.4.1 |
 
-**Payload shape — single-hash vs composite.** Most artifacts use the single-hash payload `domain_separator || artifact_hash`. Three entries are *composite-payload* separators that, by design, prepend the separator to more than one framed value rather than a single artifact hash: `dacs-session-binding:v1:` (`|| session_key || bundle_hash`, §6.3.2), `dacs-auto-accept-commitment:v1:` (`|| sha256(canonical(commitment))`, single-hash), and `dacs-auto-accept-instance:v1:` (`|| agreementHash || autoAcceptCommitmentHash`, §8.4.1). For composite-payload separators each appended value MUST be a fixed-length hex sha256 digest (or, for `session_key`, the fixed-length hex public key) so the concatenation is unambiguously parseable; this is the sanctioned exception to the single-`artifact_hash` shape and these separators are first-class registry entries, not `dacs-x-` extensions.
+**Payload shape — single-hash vs composite.** Most artifacts use the single-hash payload `domain_separator || artifact_hash`. Three entries are *composite-payload* separators that, by design, prepend the separator to more than one framed value rather than a single artifact hash:
+
+- `dacs-session-binding:v1:` (`|| session_key || bundle_hash`, §6.3.2);
+- `dacs-auto-accept-commitment:v1:` (`|| sha256(canonical(commitment))`, single-hash);
+- `dacs-auto-accept-instance:v1:` (`|| agreementHash || autoAcceptCommitmentHash`, §8.4.1).
+
+For composite-payload separators each appended value MUST be a fixed-length hex sha256 digest (or, for `session_key`, the fixed-length hex public key) so the concatenation is unambiguously parseable. This is the sanctioned exception to the single-`artifact_hash` shape; these separators are first-class registry entries, not `dacs-x-` extensions.
 
 **Commitment-hash domain tags.** The table above registers *signature* domain separators (SIG-1 scopes to signatures). One further `dacs-*:v1:` tag is a **commitment-hash** domain, not a signature payload: `dacs-sealed-bid:v1:` (the sealed-envelope bidHash preimage `sha256("dacs-sealed-bid:v1:" || sha256(canonical_JCS(bid)) || salt)`, §8.4.3). It follows the same domain-separation discipline (preventing cross-use of the hash) but is NOT a signature `signed_bytes`, so SIG-1 and the "sign every artifact kind" conformance do not apply to it; it is the one sanctioned commitment-hash domain tag in v0.1.
 
-**Conformance.** (SIG-1) Every signature in DACS v0.1 MUST be computed over the appropriate domain-separated payload from the table above (single-hash or composite per the note above). (SIG-2) Verifiers MUST reconstruct the domain separator and artifact hash(es) independently and MUST NOT trust either supplied as-is by a counterparty. (SIG-3) Signatures whose payload computation cannot be reproduced exactly MUST be rejected. (SIG-4) An artifact kind not in the v0.1 table MUST use a domain separator of the form "dacs-x-" || kind || ":v" || version || ":" until accepted into a future version of the registry. (SIG-5) **Preserve-unknown.** A verifier MUST reconstruct the signed payload (canonical form and artifact hash) over the document **as received**, including any fields it does not recognise. It MUST NOT strip, drop, or otherwise omit unrecognised fields before recomputing the canonical form — doing so changes the hash and would reject a validly-signed document produced under a later minor version. A verifier MAY ignore the *meaning* of unknown fields but MUST include their bytes in the hash. This is what makes the "forward-readable shapes" guarantee of §11.1.2 hold for signed artifacts: an older verifier can still verify a newer minor version's signature, interpreting only the fields it knows.
-**Algorithm.** The signing algorithm itself (Ed25519, ECDSA-secp256k1, or sr1-aggregate) is independent of the domain-separation rule. The domain separator is prepended to the signed bytes regardless of algorithm. Implementations MUST NOT compute a signature over the artifact hash without the separator and MUST NOT compute a signature over the canonical form directly (always over the prepended-separator-then-hash payload). `artifact_hash` MUST be the lowercase hex string of the sha256 digest; the `domain_separator` (a UTF-8 string) and `artifact_hash` (an ASCII hex string) are concatenated as UTF-8 byte sequences with no separator byte.
+**Conformance.**
+
+- (SIG-1) Every signature in DACS v0.1 MUST be computed over the appropriate domain-separated payload from the table above (single-hash or composite per the note above).
+- (SIG-2) Verifiers MUST reconstruct the domain separator and artifact hash(es) independently and MUST NOT trust either supplied as-is by a counterparty.
+- (SIG-3) Signatures whose payload computation cannot be reproduced exactly MUST be rejected.
+- (SIG-4) An artifact kind not in the v0.1 table MUST use a domain separator of the form "dacs-x-" || kind || ":v" || version || ":" until accepted into a future version of the registry.
+- (SIG-5) **Preserve-unknown.** A verifier MUST reconstruct the signed payload (canonical form and artifact hash) over the document **as received**, including any fields it does not recognise. It MUST NOT strip, drop, or otherwise omit unrecognised fields before recomputing the canonical form — doing so changes the hash and would reject a validly-signed document produced under a later minor version. A verifier MAY ignore the *meaning* of unknown fields but MUST include their bytes in the hash.
+
+> **Note (non-normative).** SIG-5 is what makes the "forward-readable shapes" guarantee of §11.1.2 hold for signed artifacts: an older verifier can still verify a newer minor version's signature, interpreting only the fields it knows.
+
+**Algorithm.** The signing algorithm itself (Ed25519, ECDSA-secp256k1, or sr1-aggregate) is independent of the domain-separation rule; the domain separator is prepended to the signed bytes regardless of algorithm. The byte-exact rules:
+
+- Implementations MUST NOT compute a signature over the artifact hash without the separator, and MUST NOT compute a signature over the canonical form directly — always over the prepended-separator-then-hash payload.
+- `artifact_hash` MUST be the lowercase hex string of the sha256 digest.
+- The `domain_separator` (a UTF-8 string) and `artifact_hash` (an ASCII hex string) are concatenated as UTF-8 byte sequences with no separator byte.
 
 ## C. Composed open standards
 
@@ -335,13 +399,22 @@ A cross-reference to §6.x lives in DACS-1, §7.x in DACS-2, §8.x in DACS-3, §
 
 #### 11.1.1 Current steward
 
-DACS v0.1 is stewarded by **KyneSys Labs**. This means: the registry signing key currently used to sign recipes (DACS-2) and rail definitions (DACS-4) is held by KyneSys Labs; the canonical anchored addresses for those registries are written by KyneSys Labs; spec changes between minor versions are reviewed and merged by KyneSys Labs. This is a single-steward arrangement — phase PA-2 in the progressive-anchoring scheme defined in §7.4.4. It is **not** the long-term governance target; it is the honest description of where v0.1 sits at time of publication.
+DACS v0.1 is stewarded by **KyneSys Labs**. This means:
+
+- the registry signing key currently used to sign recipes (DACS-2) and rail definitions (DACS-4) is held by KyneSys Labs;
+- the canonical anchored addresses for those registries are written by KyneSys Labs;
+- spec changes between minor versions are reviewed and merged by KyneSys Labs.
+
+This is a single-steward arrangement — phase PA-2 in the progressive-anchoring scheme defined in §7.4.4. It is **not** the long-term governance target; it is the honest description of where v0.1 sits at time of publication.
 Multi-party governance — a constituted working group, formal multi-signature schemes for the registries, sub-authority delegation by domain (sanctions lists, financial regulation, settlement rails) — is open work. v0.1 ships under single-steward semantics so the standard can move forward; transitioning to a multi-party arrangement is anticipated as the ecosystem of implementers, reviewers, and operators grows. The PA-2 → PA-3 transition (§7.4.4) is the formal anchor point for that change.
+
 **(GOV-1)** Implementations consuming the registries MUST disclose to their users which signing key they treat as authoritative and MUST NOT misrepresent the current steward as a constituted multi-party body. Third-party implementations (such as PATH-OS Labs’ reference) MAY operate against the same canonical registries; the steward arrangement governs who writes the registries, not who reads them.
 
 #### 11.1.2 Versioning
 
-DACS v0.1 is a common baseline: all five per-stage standards, the front-matter substrate-binding, the threat model, the glossary, and the conformance plan are published together at v0.1, the first publicly released version. From this baseline onward each per-stage standard versions independently — a standard that gains capabilities bumps its own version without forcing the others, and a pipeline composes a coherent set of per-stage versions. Within a standard, major versions (v1, v2, …) break compatibility; minor versions (v0.2, v0.3, …) add capabilities while preserving forward-readable shapes. v0.1 freezes the registries (claim schemes in DACS-1, methods/recipes in DACS-2, patterns in DACS-3, rails in DACS-4) as an immutable baseline; later additions happen via minor-version registry updates released by the current steward, **appended to the same registry-index document** (`dacs2:registry:v0.1` / `dacs4:registry:v0.1`). That index address is the registry's **major-version line**: the `:v0.1` suffix denotes the v0.x line, not a content snapshot — the index document grows additively across minor versions and is re-addressed only on a major (v1 → v2) bump. A consumer therefore always resolves the same address and sees every v0.x entry; "frozen at v0.1" means the original baseline entries are immutable (never mutated in place), not that the index stops growing. Each entry carries its own `recipeVersion` / `railVersion` for per-session pinning (§7.4.3 / §9.4.3). v1.0 is the version at which a standard is considered ready for unsupervised production use.
+DACS v0.1 is a common baseline: all five per-stage standards, the front-matter substrate-binding, the threat model, the glossary, and the conformance plan are published together at v0.1, the first publicly released version. From this baseline onward each per-stage standard versions independently — a standard that gains capabilities bumps its own version without forcing the others, and a pipeline composes a coherent set of per-stage versions. Within a standard, major versions (v1, v2, …) break compatibility; minor versions (v0.2, v0.3, …) add capabilities while preserving forward-readable shapes. v1.0 is the version at which a standard is considered ready for unsupervised production use.
+
+**Registry freezing and growth.** v0.1 freezes the registries (claim schemes in DACS-1, methods/recipes in DACS-2, patterns in DACS-3, rails in DACS-4) as an immutable baseline. Later additions happen via minor-version registry updates released by the current steward, **appended to the same registry-index document** (`dacs2:registry:v0.1` / `dacs4:registry:v0.1`). That index address is the registry's **major-version line**: the `:v0.1` suffix denotes the v0.x line, not a content snapshot. The index document grows additively across minor versions and is re-addressed only on a major (v1 → v2) bump. A consumer therefore always resolves the same address and sees every v0.x entry; "frozen at v0.1" means the original baseline entries are immutable (never mutated in place), not that the index stops growing. Each entry carries its own `recipeVersion` / `railVersion` for per-session pinning (§7.4.3 / §9.4.3).
 
 #### 11.1.3 Conformance philosophy
 
@@ -361,7 +434,12 @@ Seven areas are deliberately out of scope for v0.1 and intended for subsequent s
 
 #### 11.2.1 Dispute resolution (DACS-X, anticipated)
 
-v0.1 produces signed, anchored bundles. v0.1 does not specify what happens when parties disagree about a bundle’s contents, contest a settlement amendment, or wish to invoke an arbitrator. A follow-on standard (working name DACS-X) is anticipated to: specify a dispute initiation phase referencing one or more bundles; specify selective transcript disclosure protocols (revealing channel transcripts to a named arbitrator under signed party agreement); specify arbitrator credentialing patterns (likely composing DACS-1 + DACS-2 — arbitrators are agents with verified credentials); specify dispute outcome bundles that supersede or annotate the original session bundles.
+v0.1 produces signed, anchored bundles. v0.1 does not specify what happens when parties disagree about a bundle’s contents, contest a settlement amendment, or wish to invoke an arbitrator. A follow-on standard (working name DACS-X) is anticipated to specify:
+
+- a dispute initiation phase referencing one or more bundles;
+- selective transcript disclosure protocols (revealing channel transcripts to a named arbitrator under signed party agreement);
+- arbitrator credentialing patterns (likely composing DACS-1 + DACS-2 — arbitrators are agents with verified credentials);
+- dispute outcome bundles that supersede or annotate the original session bundles.
 
 #### 11.2.2 Open phase set
 
@@ -379,7 +457,12 @@ v0.1 rails are discrete-transaction. Streaming payment rails (Sablier-style, pay
 
 Each per-stage standard specifies forward-compatibility within itself (a later-minor reader handles earlier-minor bundles of the same standard). Cross-version compatibility (a DACS-1 v2 listing pipelined against a DACS-3 v0.1 negotiator) is deferred; pipelines MUST currently use a coherent set of per-stage versions.
 
-**v0.1 version-signalling scope.** Every anchored artifact carries a `*Version` literal (`dacsVersion`, `bundleVersion`, `agreementVersion`, `evidenceVersion`, `ratingVersion`, `resultVersion`) that records the **major** version only; in v0.1 these are all `"1"`. The listing-validation "dacsVersion supported" gate (§6.3.4 step 2) is therefore a **major-version** check in v0.1 — meaningful against a future major (v2) break, but not minor-discriminating. Two things are consequently **not** signalled in v0.1 and are roadmapped: (a) a per-artifact **producing-minor-version** field, which a reader would need to select an era-specific decode path (the later-reads-earlier direction is already handled for signed artifacts by SIG-5 preserve-unknown + "forward-readable shapes"); and (b) the **older-reader-newer-minor** direction (an older reader encountering a higher-minor artifact) — undefined in v0.1. Since v0.1 is the single published baseline, neither bites today; both land with the cross-version compatibility work above.
+**v0.1 version-signalling scope.** Every anchored artifact carries a `*Version` literal (`dacsVersion`, `bundleVersion`, `agreementVersion`, `evidenceVersion`, `ratingVersion`, `resultVersion`) that records the **major** version only; in v0.1 these are all `"1"`. The listing-validation "dacsVersion supported" gate (§6.3.4 step 2) is therefore a **major-version** check in v0.1 — meaningful against a future major (v2) break, but not minor-discriminating. Two things are consequently **not** signalled in v0.1 and are roadmapped:
+
+- (a) a per-artifact **producing-minor-version** field, which a reader would need to select an era-specific decode path (the later-reads-earlier direction is already handled for signed artifacts by SIG-5 preserve-unknown + "forward-readable shapes");
+- (b) the **older-reader-newer-minor** direction (an older reader encountering a higher-minor artifact) — undefined in v0.1.
+
+Since v0.1 is the single published baseline, neither bites today; both land with the cross-version compatibility work above.
 
 #### 11.2.6 Multi-party governance and registry stewardship
 
@@ -392,7 +475,15 @@ v0.1 discloses a presented bundle's full `claims[]` set and its `presentedBy` pr
 ### 11.3 Closing
 
 Agent commerce is moving from prototype to production. DACS is a contribution toward keeping the lifecycle on public infrastructure: a stack that composes with the existing open standards where they work, fills the gaps where they don’t, and makes substrate dependencies explicit. A reference implementation runs the lifecycle end-to-end on the Demos substrate; an independent third-party reference implementation (PATH-OS Labs’ pathos-dacs-ref) implements the DACS-1 + DACS-2-GLEIF + DACS-5 verifier subset against the same spec.
-What this document is **not**: a finished standard ready for unsupervised production at every scale. The honest list of remaining work — beyond the per-stage follow-on topics in §11.2 — includes: protocol-level wire specifications for SR-3 and SR-4 (currently trust-property specified only); expansion of independent reference-implementation coverage beyond the current third-party verifier; engagement with the maintainers of every composed standard (ERC-8004, AP2 via FIDO Alliance, W3C VC, A2A) to convert "DACS composes with X" from a unilateral claim into a documented cross-maintainer conversation; a unified threat-model audit (§12) reviewed by parties outside the current stewardship; constitution of multi-party governance (§11.2.6); and conformance test suites (§14) ready for implementers to run against.
+What this document is **not**: a finished standard ready for unsupervised production at every scale. The honest list of remaining work — beyond the per-stage follow-on topics in §11.2 — includes:
+
+- protocol-level wire specifications for SR-3 and SR-4 (currently trust-property specified only);
+- expansion of independent reference-implementation coverage beyond the current third-party verifier;
+- engagement with the maintainers of every composed standard (ERC-8004, AP2 via FIDO Alliance, W3C VC, A2A) to convert "DACS composes with X" from a unilateral claim into a documented cross-maintainer conversation;
+- a unified threat-model audit (§12) reviewed by parties outside the current stewardship;
+- constitution of multi-party governance (§11.2.6);
+- conformance test suites (§14) ready for implementers to run against.
+
 Some of these will reveal gaps that need new work, not just refinement. The intent of v0.1 is to ship a coherent baseline that the next 6–12 months of implementation experience and ecosystem engagement can sharpen. It is not the final word on agent commerce.
 
 ## Chapter 12 — Unified threat model
@@ -401,8 +492,25 @@ This chapter collects, partitions, and rationalises the per-chapter security con
 
 ### 12.1 Scope and non-goals
 
-DACS’s security goals are: (a) cryptographic non-repudiation of every per-session artifact (listings, bundles, agreements, evidence) by the parties that produced them; (b) tamper-evident audit trail — any modification of an anchored artifact is detectable by content-hash comparison; (c) limited-trust substrate dependency — the substrate is trusted for liveness and consensus per its own security model, not for application-layer semantics; (d) prevention of cross-protocol signature confusion via the universal domain-separation scheme in §B.7; (e) prevention of replay across sessions via per-session jobIds, nonces, and content hashes; (f) substrate-failure isolation in reputation derivation so substrate outages do not damage party reputations.
-Non-goals: DACS does **not** prevent collusion between buyer and seller (two parties who jointly fabricate a session produce a valid session; the audit trail records what they say happened, not what objectively happened). DACS does **not** prevent denial-of-service by a counterparty or by the substrate (it produces evidence of the failure for reputation purposes, but does not guarantee progress). DACS does **not** prevent regulatory non-compliance — it produces artifacts useful for compliance audit but does not enforce any specific regulatory regime. DACS does **not** provide unconditional privacy — the SR-4 channel contents stay between members, but member identity and timing of commitments are visible on the public chain by design. **This visibility extends to the audit layer**: anchored DACS-5 bundles, commit-agreement records, and DACS-2 vet attestations carry party **primary claims — durable authority-issued identities (LEI, FINRA-CRD, …) — in cleartext at derivable addresses**, so a passive observer can reconstruct the **counterparty graph** (who transacted with whom, correlatable across every session an identity runs) with **no cryptography to break**, and can read each vet attestation's `scheme:identifier:decision` (e.g. "party X was screened against OFAC → clear"). DACS accepts this by design — it is an *accountability* standard, and a public, verifiable audit trail necessarily exposes the relationship. (Raw private *values* behind a verification are separately protected by the §7.5 public-anchor data-minimisation rule; only predicate outcomes are exposed.) A confidentiality layer that anchors these records **encrypted to the parties** while keeping the content hash public for tamper-evidence is roadmap work, not v0.1.
+DACS’s security goals are:
+
+- (a) cryptographic non-repudiation of every per-session artifact (listings, bundles, agreements, evidence) by the parties that produced them;
+- (b) tamper-evident audit trail — any modification of an anchored artifact is detectable by content-hash comparison;
+- (c) limited-trust substrate dependency — the substrate is trusted for liveness and consensus per its own security model, not for application-layer semantics;
+- (d) prevention of cross-protocol signature confusion via the universal domain-separation scheme in §B.7;
+- (e) prevention of replay across sessions via per-session jobIds, nonces, and content hashes;
+- (f) substrate-failure isolation in reputation derivation so substrate outages do not damage party reputations.
+
+Non-goals:
+
+- DACS does **not** prevent collusion between buyer and seller. Two parties who jointly fabricate a session produce a valid session; the audit trail records what they say happened, not what objectively happened.
+- DACS does **not** prevent denial-of-service by a counterparty or by the substrate. It produces evidence of the failure for reputation purposes, but does not guarantee progress.
+- DACS does **not** prevent regulatory non-compliance. It produces artifacts useful for compliance audit but does not enforce any specific regulatory regime.
+- DACS does **not** provide unconditional privacy. The SR-4 channel contents stay between members, but member identity and timing of commitments are visible on the public chain by design.
+
+**The visibility non-goal extends to the audit layer.** Anchored DACS-5 bundles, commit-agreement records, and DACS-2 vet attestations carry party **primary claims — durable authority-issued identities (LEI, FINRA-CRD, …) — in cleartext at derivable addresses**. A passive observer can therefore reconstruct the **counterparty graph** (who transacted with whom, correlatable across every session an identity runs) with **no cryptography to break**, and can read each vet attestation's `scheme:identifier:decision` (e.g. "party X was screened against OFAC → clear"). DACS accepts this by design — it is an *accountability* standard, and a public, verifiable audit trail necessarily exposes the relationship. Raw private *values* behind a verification are separately protected by the §7.5 public-anchor data-minimisation rule; only predicate outcomes are exposed.
+
+> **Note (non-normative).** A confidentiality layer that anchors these records **encrypted to the parties** while keeping the content hash public for tamper-evidence is roadmap work, not v0.1.
 
 ### 12.2 Adversary model
 
@@ -425,7 +533,10 @@ The threat model assumes adversaries with the following capabilities; per-threat
 | Malicious verifier | Runs the DACS-2 vet path; can mis-run a recipe, substitute a method, or assert a decision the authority did not return. | Forging the authority's signed/consensus-anchored response, or a recipe steward signature; producing a VerifyResult that re-derives correctly under method/recipe-version checks. |
 | Spam / resource-exhaustion adversary | Floods a public surface (ERC-8004 registry writes, negotiation-channel griefing, mempool) to raise cost or degrade availability. | Forging identities or claims (each write/identity costs); breaking liveness of correctly-rate-limited or staked surfaces. |
 
-**Reconciling the §12.4 "Primary adversary" column with this model.** Every §12.4 row's adversary resolves to a class above, with two conventions: (a) **variants of an existing class** — "competing bidder" and "two colluding counterparties" are *Malicious counterparty* (single and colluding); "public-mempool observer" is *Network observer*; "storage operator" is *Malicious infrastructure*. (b) **Non-adversary conditions** — "time" (TOCTOU / stale-window races) and "implementation bug" (e.g. decimal overflow) are **environmental / robustness** conditions, not adversaries: the threat is real and the cited mitigation stands, but there is no actor to model — these rows are defended by deterministic rules and bounds, not by an adversary assumption.
+**Reconciling the §12.4 "Primary adversary" column with this model.** Every §12.4 row's adversary resolves to a class above, with two conventions:
+
+- (a) **Variants of an existing class** — "competing bidder" and "two colluding counterparties" are *Malicious counterparty* (single and colluding); "public-mempool observer" is *Network observer*; "storage operator" is *Malicious infrastructure*.
+- (b) **Non-adversary conditions** — "time" (TOCTOU / stale-window races) and "implementation bug" (e.g. decimal overflow) are **environmental / robustness** conditions, not adversaries. The threat is real and the cited mitigation stands, but there is no actor to model; these rows are defended by deterministic rules and bounds, not by an adversary assumption.
 
 ### 12.3 Trust boundaries
 
@@ -492,7 +603,11 @@ Every per-chapter security threat, indexed by adversary class and mitigation sta
 
 ### 12.5 Composite trust property
 
-A DACS-5 bundle that validates against all per-chapter conformance rules and whose contained references all dereference and validate provides the following composite trust property to a consumer: "Two or more parties identified by the named primary claims (with the trust profile each claim’s scheme implies) participated in a session against the named listing version, agreed to the named terms, exchanged the named settlements, and produced this audit record. The substrate operator did not collude with the parties to forge the record. The recipe registry was not compromised at the time of the verifications. The composed external standards (W3C VC, TLSNotary, ACME, etc.) behaved per their own security models." This is the composite security claim of DACS v0.1. Each clause has explicit mitigation in the per-chapter sections; each has explicit residual risk in this chapter’s adversary model.
+A DACS-5 bundle that validates against all per-chapter conformance rules and whose contained references all dereference and validate provides the following composite trust property to a consumer:
+
+> "Two or more parties identified by the named primary claims (with the trust profile each claim’s scheme implies) participated in a session against the named listing version, agreed to the named terms, exchanged the named settlements, and produced this audit record. The substrate operator did not collude with the parties to forge the record. The recipe registry was not compromised at the time of the verifications. The composed external standards (W3C VC, TLSNotary, ACME, etc.) behaved per their own security models."
+
+This is the composite security claim of DACS v0.1. Each clause has explicit mitigation in the per-chapter sections; each has explicit residual risk in this chapter’s adversary model.
 
 ## Chapter 13 — Glossary
 
@@ -654,7 +769,12 @@ A cross-cutting test category that every conforming implementation runs once:
 - Unknown-artifact x-* prefix test: implementations encountering an unknown domain separator MUST reject; experimental x- separators MUST be accepted only with out-of-band agreement.
 - **CF-1 (NFC).** A document carrying a non-ASCII identifier supplied in NFD form MUST hash and verify identically to the same document supplied in NFC form; a verifier MUST normalise before recomputing the canonical form.
 - **CF-2/CF-3 (ClaimReference canonical form & identity).** `CCI-LEI:…` and `cci-lei:…` MUST produce identical content hashes when embedded in a signed document (scheme case-folded). Two references differing only in parameter order MUST produce identical canonical bytes; two references differing only in the presence/value of parameters MUST resolve to the same reputation key (parameters excluded from identity).
-- **CF-4 (logical-address encoding).** A logical address built from a multi-colon primary claim MUST round-trip: assemble → derive native address → split the logical address back into `{sellerPrimaryClaim, listingId, listingVersion}` and percent-decode each to the exact originals. The DACS-4 payment-evidence address `dacs4:payment:{jobId}:{railId}:{phaseIndex}` MUST likewise round-trip a multi-colon `railId` (e.g. `evm-erc20:1:USDC`) — the encoded railId splits back to its exact original while `phaseIndex`/`resolved` remain unescaped fixed segments — and the DACS-2 addresses `dacs2:{jobId}:{scheme}:{identifier}:v{recipeVersion}` and `dacs2:composite:{jobId}:{evaluatedParty}` MUST round-trip a multi-colon `{identifier}` / `{evaluatedParty}` (e.g. `evm:mainnet:0x1234`) while `{scheme}`/`v{recipeVersion}` remain unescaped; and the DACS-5 rating address `dacs5:rating:{jobId}:{rater}` MUST round-trip a multi-colon `{rater}`. An address whose variable segments are left raw (unescaped) MUST be rejected as malformed.
+- **CF-4 (logical-address encoding).** A logical address built from a multi-colon primary claim MUST round-trip: assemble → derive native address → split the logical address back into `{sellerPrimaryClaim, listingId, listingVersion}` and percent-decode each to the exact originals. Likewise, per address kind:
+  - the DACS-4 payment-evidence address `dacs4:payment:{jobId}:{railId}:{phaseIndex}` MUST round-trip a multi-colon `railId` (e.g. `evm-erc20:1:USDC`) — the encoded railId splits back to its exact original while `phaseIndex`/`resolved` remain unescaped fixed segments;
+  - the DACS-2 addresses `dacs2:{jobId}:{scheme}:{identifier}:v{recipeVersion}` and `dacs2:composite:{jobId}:{evaluatedParty}` MUST round-trip a multi-colon `{identifier}` / `{evaluatedParty}` (e.g. `evm:mainnet:0x1234`) while `{scheme}`/`v{recipeVersion}` remain unescaped;
+  - the DACS-5 rating address `dacs5:rating:{jobId}:{rater}` MUST round-trip a multi-colon `{rater}`.
+
+  An address whose variable segments are left raw (unescaped) MUST be rejected as malformed.
 - **CD-1 (canonical decimal).** `"1.50"` and `"1.5"` as `PriceTerm.amount` MUST produce identical agreement hashes and signatures.
 - **SIG-5 (preserve-unknown).** A verifier built against schema vN MUST successfully verify the signature on a document produced under vN+1 that adds an unknown field, by hashing the document as received (unknown field included); a verifier that strips the unknown field before hashing (and thus rejects) FAILS this test.
 
@@ -687,6 +807,7 @@ The following are not part of v0.1 conformance and SHOULD NOT be tested as such:
 ## References
 
 Cross-stage references for DACS-1 through DACS-5. Per-stage chapters may cite additional substrate-specific or standard-specific material inline.
+
 **Normative — RFCs**
 
 - RFC 2119 — *Key words for use in RFCs to Indicate Requirement Levels*. Bradner. 1997.
