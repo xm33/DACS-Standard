@@ -505,11 +505,11 @@ signed_bytes := "dacs-verifyresult:v1:" || verifyresult_hash
 **Public-anchor data minimisation (normative).** A VerifyResult is anchored at a publicly-derivable address (§7.3.1 CM-2) in cleartext, so its `data` field is world-readable. The rules:
 
 - `data` in a publicly-anchored VerifyResult MUST carry **only predicate outcomes** — the booleans / derived facts the recipe's match needs (e.g. `{ overEighteen: true }`, `{ sanctioned: false }`, `{ kycTier: "enhanced" }`).
-- `data` MUST NOT carry raw extracted **private** personal or financial fields (date of birth, account balance, document/government-ID numbers) or any value a privacy-preserving method was used specifically to avoid disclosing.
+- `data` in a publicly-anchored VerifyResult MUST NOT carry raw extracted **private** personal or financial fields (date of birth, account balance, document/government-ID numbers) or any value a privacy-preserving method was used specifically to avoid disclosing. Carrying the raw fields is only permissible under the encrypted-to-parties anchoring mode that is roadmap work (§12.1).
 - A recipe whose `parserRules` would extract such sensitive raw fields MUST reduce them to predicate outcomes before they enter an unencrypted anchored `data`.
 - Fields that are **already public at the authority** — e.g. a public registry's published company name / jurisdiction, such as GLEIF LEI data — are NOT subject to this minimisation, since anchoring already-public registry data leaks nothing.
 
-> **Note (non-normative).** This is load-bearing for privacy-preserving methods: a `tlsnotary` or `zktls` recipe exists precisely to prove a fact without revealing the underlying value, and copying that value into a cleartext public anchor would defeat the method. Carrying the raw fields is only permissible under the encrypted-to-parties anchoring mode that is roadmap work (§12.1). The exposure of `scheme`, `identifier`, and `decision` themselves is accepted by design per §12.1.
+> **Note (non-normative).** This is load-bearing for privacy-preserving methods: a `tlsnotary` or `zktls` recipe exists precisely to prove a fact without revealing the underlying value, and copying that value into a cleartext public anchor would defeat the method. The exposure of `scheme`, `identifier`, and `decision` themselves is accepted by design per §12.1.
 
 #### 7.5.1 Decision values and semantics
 

@@ -20,6 +20,7 @@ Defect-triage and follow-on hardening on top of v0.1 (steward-merged via the iss
 ### Editorial
 
 - **DACS-4 §9.4–§9.5 two-voice readability rewrite (pilot)** — normative rule text separated from non-normative `Note` blocks per the new [SPEC-STYLE](SPEC-STYLE.md) conventions; rationale, roadmap items, and deployment metadata moved to Notes; dense paragraphs split into rule-per-bullet structure; worked PC-2 address example added. **No normative change intended**; verified by the SPEC-STYLE protocol (rule-ID census identical; keyword deltas limited to one documented RAV-R5 MUST/MUST-NOT split and one HTLC-7 REQUIRED-tag merge; all validators and tests green; independent adversarial review: 0 critical findings). Introduces `SPEC-STYLE.md` and `scripts/prose_lint.py`.
+- **Full-spec SPEC-STYLE readability sweep (CORE + DACS-1..5)** — the pilot conventions applied to the whole spec: fused bold-led paragraph runs separated (rendered as walls of text before); dense normative paragraphs split rule-per-bullet; rationale/roadmap/history moved to `Note (non-normative)` blocks; run-on procedures numbered; per-kind parameter prose → table. **No normative change intended**; each module verified by the SPEC-STYLE protocol — rule-ID census identical per module, keyword censuses unchanged (one documented MUST-NOT explicitation in DACS-4 §9.6.2), all validators + tests green, and one independent adversarial cold review per module (0 critical findings across all six; majors/minors fixed before merge). prose-lint findings across the spec: ~491 → ~310.
 
 ### Added
 

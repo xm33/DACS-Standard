@@ -51,6 +51,7 @@ A negotiation channel is a coordination surface with the following properties.
 On Demos, L2PS (Layer-2 Privacy Subnets) is the SR-4 implementation. Channel sessions are subnets; messages stay between subnet members; the public chain stores only commitment hashes and the final agreement hash (as Storage Programs).
 
 For v0.1, subnet membership MUST be bindable to the participants’ CCI primary claims, so that channel-message signatures verify against the same key that holds value on-chain and the commit-agreement anchor’s parties match the channel members. Until CCI-keyed membership ships, implementations MAY use a binding-proof step: each participant signs an "L2PS subnet X membership = CCI Y" attestation with their CCI primary key, anchored as a Storage Program before negotiation begins.
+
 Other substrates MAY implement SR-4 via TEE-based confidential channels, zk-based privacy circuits, or permissioned-overlay networks bound to public-chain identity, provided they satisfy CH-1 through CH-6. DACS-3 does not standardise the wire protocol or the cryptographic envelope — those are SR-4 implementation choices — but does standardise the messages’ semantic shape.
 
 #### 8.3.3 Message envelope (substrate-independent)
@@ -81,6 +82,7 @@ A member MUST treat the channel as failed when any of the following holds:
 - a message they sent is not acknowledged by a quorum of members within the channel’s liveness bound;
 - a member they expect to respond does not respond within a per-pattern timeout;
 - they observe contradictory views of the channel state from different sources (channel-operator forking).
+
 On detected failure, the member MAY send an abort message (best-effort), abandon the channel, and record the failure in the session record (DACS-5) with classification counterparty or substrate as appropriate. An abort terminates the channel and the Negotiate phase. The abort message’s signed envelope MAY be anchored via SR-2 as an audit artifact. The phase returns PhaseHandlerResult with ok: false and an error class.
 
 ### 8.4 Negotiation patterns
@@ -121,6 +123,7 @@ type NegotiateFixedPriceOutput = PhaseHandlerResult & {
 5. return agreementHash and agreementRef.
 
 **Seller-side auto-accept (optional)**
+
 A listing MAY declare terms.acceptanceModel: "auto-accept", in which case the seller pre-issues a **template acceptance commitment** alongside the listing rather than a per-session signature. The mechanism:
 
 - The seller publishes, at listing-anchor time, a separate AutoAcceptCommitment record: { listingRef, listingContentHash, acceptanceModel: "auto-accept", validUntil, sellerSignature } where sellerSignature is the seller’s signature over the domain-separated payload "dacs-auto-accept-commitment:v1:" || sha256(canonical(commitment)). This commits the seller to auto-accepting any buyer signature against the listed terms within validUntil.
@@ -242,6 +245,7 @@ type NegotiateSealedEnvelopeOutput = PhaseHandlerResult & {
 7. **Anchor** the agreement via SR-2 (each reveal record was already anchored by its own bidder in step 4).
 
 **Sealed bid body schema**
+
 The body of a sealed-envelope-reveal message (the revealed `bid`, and therefore the value committed to in step 2) MUST conform to:
 ```
 type SealedBid = {

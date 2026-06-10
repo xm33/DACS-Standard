@@ -130,7 +130,10 @@ Transitions are deterministic and forward-only. The orchestrator advances state 
 | `aborted-by-self` | — | `aborted-by-self` |
 | `aborted-by-other` | — | `aborted-by-other` |
 
-`transient` after retry-budget exhaustion is a permanent inability to complete the phase → `failed-perm`. `settlement-atomicity` (one side of a cross-chain settlement landed, the other did not) is attributed to the counterparty/rail, not the local party → `failed-counterparty`. A `settle-failed` with `settlement-atomicity` is reached only **after** the asymmetric open state (ST-8) has been entered and its recovery window has expired without resolution; while the window is open the session is in the non-terminal `settle-asymmetric` state, and an `htlc-claim` reaching source-chain finality within the window resolves it forward (the pay phase returns ok and the per-stage sequencer completes any remaining settle phases) to `settle-completed → finalised` (terminal `completed`) per ST-8 — so a late-settling-but-successful cross-chain swap is recorded as `completed`, not as a failure. No terminal state lacks an `outcome`, and no `outcome` lacks a producing terminal state; `settle-asymmetric` is non-terminal and therefore produces no bundle until it resolves.
+- `transient` after retry-budget exhaustion is a permanent inability to complete the phase → `failed-perm`.
+- `settlement-atomicity` (one side of a cross-chain settlement landed, the other did not) is attributed to the counterparty/rail, not the local party → `failed-counterparty`.
+- A `settle-failed` with `settlement-atomicity` is reached only **after** the asymmetric open state (ST-8) has been entered and its recovery window has expired without resolution. While the window is open the session is in the non-terminal `settle-asymmetric` state, and an `htlc-claim` reaching source-chain finality within the window resolves it forward (the pay phase returns ok and the per-stage sequencer completes any remaining settle phases) to `settle-completed → finalised` (terminal `completed`) per ST-8 — so a late-settling-but-successful cross-chain swap is recorded as `completed`, not as a failure.
+- No terminal state lacks an `outcome`, and no `outcome` lacks a producing terminal state; `settle-asymmetric` is non-terminal and therefore produces no bundle until it resolves.
 
 #### 10.3.2 Persistence and visibility
 
@@ -216,14 +219,32 @@ type BundleSignature = {
 
 #### 10.4.1 Canonical serialisation, hash, and domain-separated signature
 
-Canonical form is RFC 8785 JCS of the bundle with the `signatures` **and `anchoredByRole`** fields omitted. (`anchoredByRole` is per-copy — buyer vs seller vs orchestrator — and is carried only for derive()'s perspective read, §10.5.1; it is excluded from the hashed canonical form exactly like `signatures` so the two-sided copies remain canonically equal in the happy path. This is a recognised, specified omission, not a SIG-5 silent strip.) Bundle hash is sha256(canonical_form), hex-encoded. Each BundleSignature.value MUST be computed over a domain-separated payload:
+Canonical form is RFC 8785 JCS of the bundle with the `signatures` **and `anchoredByRole`** fields omitted. Bundle hash is sha256(canonical_form), hex-encoded. Each BundleSignature.value MUST be computed over a domain-separated payload:
+
 signed_bytes = "dacs-bundle:v1:" || bundleHash.value
-The "dacs-bundle:v1:" string prefix prevents cross-protocol signature confusion: an attacker capturing a bundle signature MUST NOT be able to replay it as a listing signature, agreement signature, or any other DACS signature even if the hash bytes collide. Verifiers MUST recompute the canonical form, the bundle hash, the prefixed signed_bytes, and verify each signature against the appropriate party’s primary-claim key. Required signers: buyer + seller. If the orchestrator is a distinct party (not buyer or seller), the orchestrator signature is also REQUIRED. Bundles whose outcome is `completed`, `failed-perm`, `failed-counterparty`, or `failed-substrate` and that are missing any required signature MUST be rejected by consumers. A bundle whose outcome is `aborted-by-self` or `aborted-by-other` MAY carry a single signature; consumers MUST NOT reject it on that basis but MUST classify it per the bundle-suppression rule in §10.11.
+
+> **Note (non-normative).** `anchoredByRole` is per-copy — buyer vs seller vs orchestrator — and is carried only for derive()'s perspective read (§10.5.1); it is excluded from the hashed canonical form exactly like `signatures` so the two-sided copies remain canonically equal in the happy path. This is a recognised, specified omission, not a SIG-5 silent strip.
+
+The "dacs-bundle:v1:" string prefix prevents cross-protocol signature confusion: an attacker capturing a bundle signature MUST NOT be able to replay it as a listing signature, agreement signature, or any other DACS signature even if the hash bytes collide.
+
+Verification and signer rules:
+
+- Verifiers MUST recompute the canonical form, the bundle hash, and the prefixed signed_bytes, and verify each signature against the appropriate party’s primary-claim key.
+- Required signers: buyer + seller. If the orchestrator is a distinct party (not buyer or seller), the orchestrator signature is also REQUIRED.
+- Bundles whose outcome is `completed`, `failed-perm`, `failed-counterparty`, or `failed-substrate` and that are missing any required signature MUST be rejected by consumers.
+- A bundle whose outcome is `aborted-by-self` or `aborted-by-other` MAY carry a single signature; consumers MUST NOT reject it on that basis but MUST classify it per the bundle-suppression rule in §10.11.
 
 #### 10.4.2 Anchoring
 
-The bundle MUST be anchored via SR-2. **Two-sided anchoring scheme.** Each signing party (buyer, seller, and orchestrator if distinct) anchors its own bundle at a party-specific address: stor-{sha256(jobId + "-bundle-" + role)} where role is "buyer", "seller", or "orchestrator". **Each anchored copy MUST set `anchoredByRole` to the role of the anchoring party, and that value MUST equal the `role` segment of the address it is anchored at; a consumer MUST reject a copy whose `anchoredByRole` does not match the address it was fetched from** (since `anchoredByRole` is excluded from the hash per §10.4.1, this address cross-check — not the signature — is what protects it from being forged). In the happy case both sides’ bundles are canonically equal (they differ only in the unhashed `anchoredByRole`) and consumers can read either; in the divergence case both sides are independently retrievable for dispute purposes (see §10.4.3).
+The bundle MUST be anchored via SR-2. **Two-sided anchoring scheme:**
+
+- Each signing party (buyer, seller, and orchestrator if distinct) anchors its own bundle at a party-specific address: stor-{sha256(jobId + "-bundle-" + role)} where role is "buyer", "seller", or "orchestrator".
+- **Each anchored copy MUST set `anchoredByRole` to the role of the anchoring party, and that value MUST equal the `role` segment of the address it is anchored at.**
+- **A consumer MUST reject a copy whose `anchoredByRole` does not match the address it was fetched from.** Since `anchoredByRole` is excluded from the hash per §10.4.1, this address cross-check — not the signature — is what protects it from being forged.
+
+In the happy case both sides’ bundles are canonically equal (they differ only in the unhashed `anchoredByRole`) and consumers can read either; in the divergence case both sides are independently retrievable for dispute purposes (see §10.4.3).
 Bundles MUST fit within the substrate’s storage-cap soft limit (128 KB on Demos Storage Programs).
+
 **Extended-pointer pattern for large sessions.** Sessions with extensive evidence (large transcripts, attestation chains, multi-party verifications, e.g. a sealed-envelope auction with 50 bidders’ commits and reveals) MAY exceed the size cap. In that case the bundle at the canonical address contains a pointer record:
 
 ```
@@ -241,8 +262,18 @@ and the full bundle is hosted externally; fullBundleContentHash binds it. Consum
 
 #### 10.4.3 Bundle production rules
 
-A bundle MUST be produced when the session reaches a terminal state. The bundle MUST include references to all DACS-2 composite verification records, DACS-3 agreement (if any), DACS-4 settlement evidence (one entry per executed phase invocation — **except** an ST-8-resolved cross-chain settle phase, which contributes exactly its `:resolved` success record; the interim `dest-revealed-source-unclaimed` failure record is NOT listed independently in `settlementEvidence[]` and is reachable only via that record's `supersedesEvidenceRef`. Both parties' `settlementEvidence[]` arrays MUST therefore contain identical entries — the resolved record, not the interim — so the two-sided copies stay canonically equal, §10.4.1), DACS-4 amendments (refunds), DACS-5 ratings (if the rate phase ran). The bundle MUST NOT include references to any record outside the session’s scope.
+A bundle MUST be produced when the session reaches a terminal state. The bundle MUST include references to:
+
+- all DACS-2 composite verification records;
+- the DACS-3 agreement (if any);
+- DACS-4 settlement evidence — one entry per executed phase invocation, **except** an ST-8-resolved cross-chain settle phase, which contributes exactly its `:resolved` success record. The interim `dest-revealed-source-unclaimed` failure record is NOT listed independently in `settlementEvidence[]` and is reachable only via that record's `supersedesEvidenceRef`. Both parties' `settlementEvidence[]` arrays MUST therefore contain identical entries — the resolved record, not the interim — so the two-sided copies stay canonically equal (§10.4.1);
+- DACS-4 amendments (refunds);
+- DACS-5 ratings (if the rate phase ran).
+
+The bundle MUST NOT include references to any record outside the session’s scope.
+
 **For sessions terminating before commit-agreement** (aborted-by-self/other in Vet or Negotiate), the bundle MUST include the available vetRecords and a phaseSummary marking the failed phase; agreementRef is omitted.
+
 **For sessions terminating with failed-substrate**, the bundle’s outcome captures the substrate failure; the failure does not count as either party’s fault in DACS-5 reputation derivation.
 Two parties producing independent bundles for the same session MUST converge on identical bundle content (by canonical-form equality — which excludes the per-copy `anchoredByRole` and `signatures` fields per §10.4.1, so the happy-path copies are equal despite carrying different `anchoredByRole` values) or MUST surface the divergence as a dispute. Each side anchors its own bundle at its own derived address; a consumer looking up "the bundle(s) for session X" MUST query both sides’ expected addresses: `stor-{sha256(jobId + "-bundle-buyer")}` and `stor-{sha256(jobId + "-bundle-seller")}` (or substrate-equivalent two-sided addressing).
 
@@ -416,19 +447,42 @@ derive(party, bundles, windowStart, windowEnd):
   return ReputationDerivation with computed metrics
 ```
 
-**Two-sided reconciliation (normative).** Because two-sided anchoring (§10.4.2) can place two bundles for one jobId in the input — each recording `outcome` from *its anchorer's* perspective — the deriver MUST collapse the input to one authoritative bundle per jobId before partitioning (the `reconciled` step above), and MUST interpret `outcome` relative to the *scored* party, not the anchorer. When the scored party's own anchored copy is present (`b.anchoredByRole` == the scored party's role), `outcome` is read literally: `aborted-by-self` means "this party aborted", `aborted-by-other` means "the counterparty aborted against this party". When only a counterparty-anchored copy exists (e.g. the §10.11 bundle-suppression case, where the withdrawing party did not anchor), `outcome` is read through `perspective_flip` — `aborted-by-self ↔ aborted-by-other` and `failed-perm ↔ failed-counterparty` — so the aborter still takes the hit and the victim does not. Reading raw `outcome` across both copies (the pre-reconciliation behaviour) would double-count an abort against the victim and invert the §10.11 guarantee; the reconciliation closes that. Three normative guards apply during reconciliation:
+**Two-sided reconciliation (normative).** Because two-sided anchoring (§10.4.2) can place two bundles for one jobId in the input — each recording `outcome` from *its anchorer's* perspective — the deriver MUST collapse the input to one authoritative bundle per jobId before partitioning (the `reconciled` step above), and MUST interpret `outcome` relative to the *scored* party, not the anchorer. The read rules:
+
+- When the scored party's own anchored copy is present (`b.anchoredByRole` == the scored party's role), `outcome` is read literally: `aborted-by-self` means "this party aborted", `aborted-by-other` means "the counterparty aborted against this party".
+- When only a counterparty-anchored copy exists (e.g. the §10.11 bundle-suppression case, where the withdrawing party did not anchor), `outcome` is read through `perspective_flip` — `aborted-by-self ↔ aborted-by-other` and `failed-perm ↔ failed-counterparty` — so the aborter still takes the hit and the victim does not.
+
+> **Note (non-normative).** Reading raw `outcome` across both copies (the pre-reconciliation behaviour) would double-count an abort against the victim and invert the §10.11 guarantee; the reconciliation closes that.
+
+Three normative guards apply during reconciliation:
 
 - (i) **signature validation first** — each copy MUST pass §10.4.1 before it is considered (a single-signed bundle is valid only for an abort outcome; a single-signed `completed`/`failed-*` MUST be dropped, closing the attack where a lone counterparty-anchored `failed-counterparty` is perspective-flipped to depress the victim's score), and any copy whose `anchoredByRole` does not match its anchor-address role (§10.4.2) MUST be dropped;
 - (ii) **divergence → exclusion** — if the scored party's own copy and a counterparty copy canonically diverge (per the single §10.4.3 definition: a contradiction in `outcome` or in a `phaseSummary` entry's `outcome`/`errorClass` — NOT mere advisory-field skew), the jobId is a §10.4.3(d) dispute and MUST be excluded from ALL metrics (removed from both the numerator and `party_fault_denom`, so a disputed session neither helps nor harms the score), rather than silently trusting the self-copy; there is no `disputed` value in the `outcome` enum (§10.4.1) — this is an exclusion, not an outcome;
 - (iii) **buyer/seller only** — `perspective_flip` is a buyer↔seller involution; orchestrator-anchored copies are evidence-only and are not used as a reputation perspective (orchestrator reputation is out of scope for v0.1), which also makes the counterparty-copy selection unambiguous (at most one buyer/seller counterparty copy per jobId).
 
-"party_at_fault" is otherwise recorded in the bundle’s phaseSummary errorClass (counterparty implies the other party; permanent on a non-cross-chain rail with no settlement-atomicity flag and a successful pre-pay state generally implies the local party at fault — absent the §7.8.2 counterparty-malformed-presentation carve-out, which maps a counterparty-malformed `error` to `counterparty`, not `permanent`); the classification rules are spelled out in the per-phase errorClass tables in chapters 7 and 9. **failed-substrate sessions** are excluded from the party-fault denominator: party_fault_denom = |outcomes| − |failed_substrate|. This ensures substrate-induced failures do not damage either party’s reputation. The four **scalar** metrics (completionRate, counterpartyDisputeRate, averageBuyerRating, averageSellerRating) with denominator > 0 produce numeric values; with denominator == 0 (e.g., bundleCount=0, or all sessions failed-substrate) they produce null — distinct from zero, signalling "no signal" rather than "zero signal". The **array** metric `observedTransactionalVolume` (a non-nullable `PriceTerm[]`) and `bundleRefs` (a non-nullable `AttestationRef[]`) produce `[]` (an empty list, never null) on the empty path. Every return path therefore yields a schema-total `ReputationDerivation`. The averageBuyerRating / averageSellerRating metrics are computed by walking each reconciled bundle’s ratingRefs, fetching the referenced RatingRecord, and verifying its signature against the rater’s primary-claim key (the same key class as a BundleSignature, per §10.4.1). A RatingRecord MUST be discarded — not aggregated — unless it binds to the session being scored: the deriver MUST require r.jobId == b.jobId, r.rater MUST be one of the bundle’s parties[].primaryClaim, and r.rater MUST NOT equal the scored party (no self-rating). Only the remaining records’ values, whose target matches the scored party, are aggregated; the metric is null when no qualifying ratings exist. The observedTransactionalVolume metric is computed analogously: for each reconciled bundle whose agreementRef is present, the deriver MUST resolve the AttestationRef to its AgreementDocument via fetch_and_verify_agreement(agreementRef) — fetching the anchor at agreementRef.anchor.locator, comparing the hashed bytes to agreementRef.contentHash (mismatch MUST cause that bundle to be excluded), and parsing the result as a DACS-3 AgreementDocument per the §7.5.2 attestation resolution algorithm — and then sum agreement.terms.price grouped by currency. agreementRef is an AttestationRef, not an inline AgreementDocument, so the volume step MUST dereference it before reading terms.price.
+**Fault attribution.** "party_at_fault" is otherwise recorded in the bundle’s phaseSummary errorClass: `counterparty` implies the other party; `permanent` on a non-cross-chain rail with no settlement-atomicity flag and a successful pre-pay state generally implies the local party at fault — absent the §7.8.2 counterparty-malformed-presentation carve-out, which maps a counterparty-malformed `error` to `counterparty`, not `permanent`. The classification rules are spelled out in the per-phase errorClass tables in chapters 7 and 9.
+
+**failed-substrate denominator.** failed-substrate sessions are excluded from the party-fault denominator: party_fault_denom = |outcomes| − |failed_substrate|. This ensures substrate-induced failures do not damage either party’s reputation.
+
+**Null vs empty metrics.** The four **scalar** metrics (completionRate, counterpartyDisputeRate, averageBuyerRating, averageSellerRating) with denominator > 0 produce numeric values; with denominator == 0 (e.g., bundleCount=0, or all sessions failed-substrate) they produce null — distinct from zero, signalling "no signal" rather than "zero signal". The **array** metric `observedTransactionalVolume` (a non-nullable `PriceTerm[]`) and `bundleRefs` (a non-nullable `AttestationRef[]`) produce `[]` (an empty list, never null) on the empty path. Every return path therefore yields a schema-total `ReputationDerivation`.
+
+**Rating metrics.** The averageBuyerRating / averageSellerRating metrics are computed by walking each reconciled bundle’s ratingRefs, fetching the referenced RatingRecord, and verifying its signature against the rater’s primary-claim key (the same key class as a BundleSignature, per §10.4.1). A RatingRecord MUST be discarded — not aggregated — unless it binds to the session being scored:
+
+- the deriver MUST require r.jobId == b.jobId;
+- r.rater MUST be one of the bundle’s parties[].primaryClaim;
+- r.rater MUST NOT equal the scored party (no self-rating).
+
+Only the remaining records’ values, whose target matches the scored party, are aggregated; the metric is null when no qualifying ratings exist.
+
+**Volume metric.** The observedTransactionalVolume metric is computed analogously: for each reconciled bundle whose agreementRef is present, the deriver MUST resolve the AttestationRef to its AgreementDocument via fetch_and_verify_agreement(agreementRef) — fetching the anchor at agreementRef.anchor.locator, comparing the hashed bytes to agreementRef.contentHash (mismatch MUST cause that bundle to be excluded), and parsing the result as a DACS-3 AgreementDocument per the §7.5.2 attestation resolution algorithm — and then sum agreement.terms.price grouped by currency. agreementRef is an AttestationRef, not an inline AgreementDocument, so the volume step MUST dereference it before reading terms.price.
 
 **Rating de-duplication (normative).** Because the two-sided anchoring scheme (§10.4.2) means both parties' bundles for one jobId may both appear in the input before reconciliation, and `ratingRefs` is an array, a naive walk would count the same rating more than once. The deriver MUST aggregate at most one rating per `(r.rater, r.jobId, r.targetRole)` tuple — last-writer-wins by `ratedAt` on a tie — so a rating contributes once per session-direction, not once per anchored bundle copy or per duplicate ref. (This is a counting rule; RT-1/RT-2 already bound each rating's value range.)
 
 **`completionRate` denominator scope.** `party_fault_denom` excludes only `failed-substrate`; it retains counterparty-fault and abort sessions. This is intentional — `completionRate` measures completed-vs-attempted, not blame — but it leaves a residual griefing surface: a counterparty that repeatedly opens and aborts sessions depresses the target's `completionRate` through `aborted-by-other`. `counterpartyDisputeRate` partially offsets this (it rises in step over the same denominator), and consumers SHOULD read the two metrics together rather than `completionRate` alone. A blame-weighted completion metric is a roadmap candidate.
 
-The windowing predicate above bounds against `b.finalisedAt`, which is a producer-set wall-clock value (§10.4) with no anchoring-time cross-check. Because the bundle is anchored via SR-2, a consensus-attested write time is also available. Consumers performing high-stakes derivation SHOULD bound the window against the bundle’s SR-2 anchor timestamp (the substrate’s consensus-attested write time) rather than, or in addition to, the self-asserted `finalisedAt`, and SHOULD flag a `finalisedAt` that diverges materially from the anchor time. This parallels the chain-timestamp discipline already required for sealed-envelope commits in §8.4.3 (SE-2), where the substrate anchor — not the producer’s clock — decides the timestamp; `finalisedAt` is otherwise advisory and the anchor time is authoritative for windowing.
+The windowing predicate above bounds against `b.finalisedAt`, which is a producer-set wall-clock value (§10.4) with no anchoring-time cross-check. Because the bundle is anchored via SR-2, a consensus-attested write time is also available. Consumers performing high-stakes derivation SHOULD bound the window against the bundle’s SR-2 anchor timestamp — the substrate’s consensus-attested write time — rather than, or in addition to, the self-asserted `finalisedAt`. They SHOULD flag a `finalisedAt` that diverges materially from the anchor time. `finalisedAt` is otherwise advisory; the anchor time is authoritative for windowing.
+
+> **Note (non-normative).** This parallels the chain-timestamp discipline already required for sealed-envelope commits in §8.4.3 (SE-2), where the substrate anchor — not the producer’s clock — decides the timestamp.
 
 #### 10.5.2 Per-primary-claim keying
 
@@ -503,7 +557,14 @@ rate is OPTIONAL in a pipeline. When present, the phase MUST:
 
 Sellers and buyers MAY decline to rate; absence of a rating does not block bundle production. The pipeline step parameters MAY specify { required: true | false } per side.
 
-**Rating bounds & dimensions (rules RT-1, RT-2).** (RT-1) A rate-phase producer MUST reject — and MUST NOT anchor — a RatingRecord whose `value` is not an integer in the inclusive range [1,5], or whose `freeText` exceeds 1000 characters. (RT-2) A reputation deriver MUST exclude (not clamp) any RatingRecord failing RT-1 from aggregation, so a malformed or hostile self-signed rating cannot enter `averageBuyerRating` / `averageSellerRating` even if a producer skips RT-1. The optional `dimensions` field is **opaque pass-through metadata**: DACS-5 reputation derivation does not interpret or aggregate it, it carries no protocol semantics, its keys and value ranges are unconstrained, and consumers MUST NOT rely on it for any conformance-bearing decision. (A canonical dimension namespace with per-dimension reputation is a roadmap candidate.)
+**Rating bounds & dimensions (rules RT-1, RT-2).**
+
+- (RT-1) A rate-phase producer MUST reject — and MUST NOT anchor — a RatingRecord whose `value` is not an integer in the inclusive range [1,5], or whose `freeText` exceeds 1000 characters.
+- (RT-2) A reputation deriver MUST exclude (not clamp) any RatingRecord failing RT-1 from aggregation, so a malformed or hostile self-signed rating cannot enter `averageBuyerRating` / `averageSellerRating` even if a producer skips RT-1.
+
+The optional `dimensions` field is **opaque pass-through metadata**: DACS-5 reputation derivation does not interpret or aggregate it, it carries no protocol semantics, its keys and value ranges are unconstrained, and consumers MUST NOT rely on it for any conformance-bearing decision.
+
+> **Note (non-normative).** A canonical dimension namespace with per-dimension reputation is a roadmap candidate.
 
 ### 10.7 ERC-8004 publication surface
 
@@ -520,6 +581,7 @@ When a party holds an erc8004 claim in their bundle, the publisher MAY write a r
 #### 10.7.2 Consumption
 
 EVM-side consumers MAY read ERC-8004 entries as a discovery surface for DACS-5 bundles. They MUST fetch the referenced bundle and validate it independently. The ERC-8004 entry is a pointer, not a substitute for the bundle.
+
 **Substrate decoupling.** Publication to ERC-8004 is OPTIONAL and is a Demos-to-Ethereum cross-pollination convenience. Other substrates MAY define equivalent publication surfaces (e.g., a Solana reputation program, a Bitcoin OP_RETURN scheme). DACS-5 does not require any particular publication surface; the bundle is the canonical artifact.
 
 ### 10.8 Conformance summary
@@ -536,19 +598,29 @@ EVM-side consumers MAY read ERC-8004 entries as a discovery surface for DACS-5 b
 ### 10.9 Rationale
 
 **Session record off-chain by default.** Anchoring every state transition would dominate session economics for no audit benefit — the bundle captures what auditors need; intermediate state is operational noise. Off-chain SessionRecord + on-chain bundle is the right split.
+
 **Bundle as the audit unit vs individual phase records.** Each phase already anchors its evidence; the bundle is the unifying envelope auditors start from and walk references out of. Without it, every consumer would reconstruct the session graph from disparate anchors.
+
 **Domain-separated bundle signature.** The `dacs-bundle:v1:` prefix prevents confusing a bundle signature with any other DACS signature even when hash bytes collide — part of the §B.7 universal scheme.
+
 **Per-primary-claim reputation vs wallet-keyed.** Wallet-keying would let a strong `key:0xabc…` reputation launder into a fresh `lei:…`. Per-primary-claim keying prevents it; a wallet honestly holding multiple claims accumulates separate reputations, surfaced cross-claim (via SR-1) without inheritance.
+
 **Substrate-failure exclusion from party-fault denominators.** A session that fails because the substrate was down is nobody's fault; counting it would deter parties from transacting during substrate strain. Excluding `failed-substrate` keeps the metric honest.
+
 **Null vs zero metrics.** A new party (bundleCount=0) has no signal, not a zero signal — zero would read as "completed 0%". Null forces consumers to handle "no data" deliberately rather than treating new parties as worst-rated.
+
 **Optional rate phase.** Mandatory ratings create noise (friction-avoidance 5-stars) and retaliation exposure; optional, decline-able rating matches institutional and marketplace norms.
+
 **ERC-8004 publication optional.** It's the dominant EVM reputation registry, but DACS-5 ships on substrates with no Ethereum-mainnet write path.
+
 **Extended-pointer pattern for oversized bundles.** Some sessions exceed the storage-program cap (multi-party auctions, long attestation chains); the pattern keeps the canonical artifact at the on-chain address and ferries the rest off-chain with content-hash binding rather than hard-failing.
 
 ### 10.10 Backwards compatibility
 
 **ERC-8004 registries.** §10.7 specifies the publication surface; DACS-5 inherits ERC-8004's read semantics for EVM consumers and leaves ERC-8004 unchanged.
+
 **Operator-marketplace ratings.** A marketplace migrating to DACS-5 MAY backfill historical ratings as operator-signed RatingRecord-equivalents; new DACS-5 ratings stand alone and are clearly distinguishable from the operator-signed history.
+
 **Audit-log standards.** A consumer MAY convert a DACS-5 bundle to RFC 5424 / OpenTelemetry at read time; DACS-5 defines only the bundle.
 
 ### 10.11 Security considerations
@@ -556,12 +628,21 @@ EVM-side consumers MAY read ERC-8004 entries as a discovery surface for DACS-5 b
 **HTLC asymmetric-loss metric blind spot (known residual).** On a window-expired ST-8 asymmetric loss, both legs map to `settle-failed`/`settlement-atomicity` → `failed-counterparty` (§10.3.1). DACS-5 v0.1 cannot distinguish, at the metric level, the **payer who already received destination value** from the **payee who is owed source value** — the payer's copy reads `failed-counterparty` (and, perspective-flipped, may even read as party-fault), so neither `completionRate` nor `counterpartyDisputeRate` reflects who actually profited. This is a DACS-X dispute concern, not resolvable in v0.1's blame model; consumers SHOULD treat any `failed-counterparty` whose phaseSummary carries an HTLC-9 `settlement-atomicity` marker as requiring out-of-band review rather than as a clean counterparty fault.
 
 **Bundle forgery.** *Threat:* an attacker produces a fake bundle claiming a session that did not happen, hoping to influence reputation. *Mitigation:* the bundle must be co-signed by both parties; signatures use domain-separated payloads; consumers verify both signatures against the parties’ verified primary claims. A unilateral bundle cannot influence the counterparty’s reputation.
+
 **Bundle suppression.** *Threat:* a party who performed badly in a session refuses to sign the bundle, hoping to prevent its publication. *Mitigation:* the non-signing party’s outcome (aborted-by-self) is recorded in the counterparty’s bundle attempt; consumers seeing a bundle with only one signature MUST classify the session as aborted-by-self for the non-signer and aborted-by-other for the signer. The non-signer’s reputation takes the appropriate hit even if they refuse to sign. (Implementation note: a one-sided bundle MUST follow exactly the same canonical form and signing rules; the absence of the counterparty’s signature is what flags the outcome. This is the carve-out referenced by §10.4.1 — the reject-missing-required-signature rule applies only to the non-abort outcomes, so a one-signature `aborted-by-self`/`aborted-by-other` bundle reaches this classification rather than being rejected.)
+
 **Sybil reputation farming.** *Threat:* an attacker creates many cheap primary claims (key:…) and farms self-deal reputation between them. *Mitigation:* DACS-5 metrics are partitioned by primary claim and do not inherit; Sybil farming over key:… claims accumulates reputation only against those claims, not against higher-tier presentations. The DACS-2 supplementary signals (counterparty being a known Sybil cluster) feed back into Vet for any party who cares.
+
 **Replay across sessions.** *Threat:* an attacker captures a signed bundle and replays it as a different session’s bundle. *Mitigation:* the bundle includes jobId; the signature payload includes the bundle hash which includes jobId. Replay against a different jobId fails verification.
+
 **Cross-protocol signature confusion.** *Threat:* a bundle signature is replayed as some other DACS signature (listing, agreement) where the underlying hash bytes happen to align. *Mitigation:* the universal signature scheme in §B.7 defines per-artifact domain separators across the entire DACS v0.1 stack; the bundle domain separator is "dacs-bundle:v1:" and other artifact kinds use their own separators per the table in §B.7. A signature produced under any artifact kind cannot validate as a signature under any other kind, even when the hash bytes coincide.
+
 **Reputation poisoning via collusion.** *Threat:* two colluding parties run many fake sessions to inflate each other’s reputation. *Mitigation:* this is fundamentally hard to prevent at the protocol level. DACS-5 mitigates by per-primary-claim keying (collusion inflates only one tier of reputation), by transactional-volume reporting (consumers can see if a party’s reputation comes from many tiny sessions vs few large ones), and by composability with external signal sources. The volume signal is **weak and must not be over-trusted**: `observedTransactionalVolume` is reported per-currency, unnormalised, with no FX conversion and no per-row transaction count (§10.5), so a colluding pair transacting across many low-significance currencies can keep every `PriceTerm` row small and evade the "few large vs many tiny" heuristic; cross-currency rows are not comparable or summable. Consumers SHOULD read volume alongside `bundleCount` and external signals rather than as a standalone collusion gate. (A per-row transaction count and an FX-normalised aggregate would strengthen it — roadmap.) Consumers handling stakes worth the cost of collusion SHOULD weigh DACS-5 metrics against external signals.
+
 **Orchestrator misclassification of errorClass.** *Threat:* the orchestrator classifies a counterparty failure as a substrate failure (or vice versa) to bias reputation. *Mitigation:* the bundle phaseSummary carries the errorClass; both parties sign the bundle; a party that disagrees with the classification refuses to sign, producing aborted-by-other. The honest party’s independent bundle (with their own classification) is the source of truth for their reputation. Persistent classification disputes are a DACS-X concern.
+
 **Bundle anchor unavailability.** *Threat:* the SR-2 anchor becomes unreadable after the session ends (e.g. storage program purged, IPFS unpinned). *Mitigation:* on-substrate anchoring (Demos Storage Programs) provides indefinite availability under substrate operation. Off-substrate anchoring (IPFS, HTTPS) is best-effort. Listings concerned with long-term auditability SHOULD use on-substrate anchoring for bundles regardless of which surface the rest of the session uses.
+
 **Time-bound reputation windows.** *Threat:* an old, no-longer-representative reputation is presented as current; or a producer backdates or forward-dates the self-asserted `finalisedAt` to move a session out of a scrutinised window or to cluster volume into a favourable one. *Mitigation:* derivations are window-bounded; consumers querying reputation MUST specify a window and SHOULD weight recent windows more heavily. The algorithm does not specify weighting (consumers choose); it does require explicit window bounds in every derivation. Against producer-chosen `finalisedAt`, consumers performing high-stakes derivation SHOULD window against the SR-2 anchor timestamp per §10.5.1, so that the substrate — not the bundle producer — decides window membership.
+
 **ERC-8004 write spamming.** *Threat:* an attacker writes many fake ERC-8004 entries pointing at fabricated bundles. *Mitigation:* ERC-8004 entries are pointers; consumers MUST fetch and validate the bundle. Fake bundles fail at validation. The cost of writing many ERC-8004 entries (gas) is a natural rate limit; DACS-5 publishers SHOULD additionally enforce per-session rate limits.
