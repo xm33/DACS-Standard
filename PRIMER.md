@@ -12,7 +12,13 @@ Autonomous agents are transacting with agents they have never met. Open standard
 
 ## 1. The problem
 
-An agent transacting with another agent today has three options: **pre-integrated bilateral trust** (breaks at scale), a **closed operator marketplace** (scales, but the operator captures rents and becomes a single point of trust), or **open standards** (the only path that scales without conceding a marketplace position — *if* a complete lifecycle exists). Today the open standards cover stages, not the lifecycle.
+An agent transacting with another agent today has three options:
+
+- **pre-integrated bilateral trust** — breaks at scale;
+- a **closed operator marketplace** — scales, but the operator captures rents and becomes a single point of trust;
+- **open standards** — the only path that scales without conceding a marketplace position, *if* a complete lifecycle exists.
+
+Today the open standards cover stages, not the lifecycle.
 
 A buyer agent can already discover a seller, recognise its identity, and authorise a payment using open standards. What it **cannot** do with open standards alone:
 

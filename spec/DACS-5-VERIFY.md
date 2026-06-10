@@ -243,6 +243,7 @@ The bundle MUST be anchored via SR-2. **Two-sided anchoring scheme:**
 - **A consumer MUST reject a copy whose `anchoredByRole` does not match the address it was fetched from.** Since `anchoredByRole` is excluded from the hash per §10.4.1, this address cross-check — not the signature — is what protects it from being forged.
 
 In the happy case both sides’ bundles are canonically equal (they differ only in the unhashed `anchoredByRole`) and consumers can read either; in the divergence case both sides are independently retrievable for dispute purposes (see §10.4.3).
+
 Bundles MUST fit within the substrate’s storage-cap soft limit (128 KB on Demos Storage Programs).
 
 **Extended-pointer pattern for large sessions.** Sessions with extensive evidence (large transcripts, attestation chains, multi-party verifications, e.g. a sealed-envelope auction with 50 bidders’ commits and reveals) MAY exceed the size cap. In that case the bundle at the canonical address contains a pointer record:
@@ -275,6 +276,7 @@ The bundle MUST NOT include references to any record outside the session’s sco
 **For sessions terminating before commit-agreement** (aborted-by-self/other in Vet or Negotiate), the bundle MUST include the available vetRecords and a phaseSummary marking the failed phase; agreementRef is omitted.
 
 **For sessions terminating with failed-substrate**, the bundle’s outcome captures the substrate failure; the failure does not count as either party’s fault in DACS-5 reputation derivation.
+
 Two parties producing independent bundles for the same session MUST converge on identical bundle content (by canonical-form equality — which excludes the per-copy `anchoredByRole` and `signatures` fields per §10.4.1, so the happy-path copies are equal despite carrying different `anchoredByRole` values) or MUST surface the divergence as a dispute. Each side anchors its own bundle at its own derived address; a consumer looking up "the bundle(s) for session X" MUST query both sides’ expected addresses: `stor-{sha256(jobId + "-bundle-buyer")}` and `stor-{sha256(jobId + "-bundle-seller")}` (or substrate-equivalent two-sided addressing).
 
 **Definition — "canonically diverge" (normative, defined once).** The two copies' canonical forms differ in `outcome`, or in a `phaseSummary` entry's `outcome`/`errorClass` — i.e. a *contradiction* about what happened. A difference confined to advisory fields (e.g. `finalisedAt` skew, one-sided `ratingRefs`, amendment ordering) is NOT a divergence. (This is the same definition the §10.5.1 deriver applies — guard (ii) — so a consumer and a deriver never reach opposite verdicts, and a party cannot force a spurious "disputed" classification by perturbing an advisory field.)

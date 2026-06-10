@@ -221,3 +221,26 @@ PC-2 example — follow-up issue candidate, not a rewrite defect.
 is a normativity-boundary hazard — consider a lint check); (b) summarising prose into a tighter
 claim ("fully supported") is the prose variant of the C1 derived-table failure mode; (c) word
 count goes *up* slightly — set expectations on scanability metrics, not length.
+
+## SPEC-STYLE full-spec sweep (2026-06-10, spec-style-pilot branch)
+
+Pilot conventions applied to CORE + all five modules in one pass (per-module commits 6218d18,
+e038426, 42fceed, eb4dae3, a2ff0bc). Biggest single win: **fused bold-led paragraph runs** —
+consecutive `**Bold.** text` source lines with no blank lines (Rationale / Backwards-compat /
+Security-considerations sections, CH-1..6, front matter) rendered as 300-500-word walls; ~150
+blank-line separations fixed this at zero semantic risk. Then targeted rule-per-bullet
+restructures + Note demotions per module.
+
+Per-module verification: rule-ID census identical ×6; keyword censuses unchanged (one documented
+MUST-NOT explicitation, DACS-4 §9.6.2); validators + 35 tests green throughout; one blind cold
+review per module. Review verdicts: DACS-4 remainder 0/1/4 (major: my "valid only if real,
+successful settlement" over-constrained correction amendments — fixed); CORE 0/0/6 (fixed);
+DACS-1 0/0/3 (kept: verified-correct owning-chapter table column); DACS-2 0/0/3 (fixed: restored
+scope qualifier + permission clause); DACS-3 0/0/3 (fixed: 4 paragraph fusions). DACS-5 review
+pending at log time.
+
+Recurring reviewer catches to watch next time: (1) scope qualifiers dropped when a shared-subject
+sentence splits into bullets (DACS-2 "in a publicly-anchored VerifyResult"); (2) permission-scoping
+sentences are normative even when they read like rationale — don't Note them; (3) keyword census
+catches accidental demotions reliably (DACS-5 attacker-replay MUST NOT). prose-lint across spec:
+~491 → ~310 active (rest = benign code-gloss parens + already-structured long procedure steps).
