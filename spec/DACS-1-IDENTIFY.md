@@ -30,6 +30,7 @@ DACS-1 fills these gaps with minimal additions. The unifying mechanism is **clai
 #### 6.3.1 Identity claim reference scheme
 
 A claim reference identifies a fact about a party that can in principle be verified against an external system.
+
 **Grammar**
 A claim reference MUST conform to:
 
@@ -47,11 +48,16 @@ Identifier       := scheme-specific, non-empty, NFC-normalized Unicode (printabl
 Parameters       := key1=value1 [ "&" key2=value2 ]*
 ```
 
-A Scheme MUST start with a lowercase ASCII letter and MAY include lowercase ASCII letters, digits, and hyphens thereafter. Underscores are reserved for future use and MUST NOT appear in v0.1 scheme names. Parsers MUST treat Scheme case-insensitively on read and SHOULD emit lowercase on write. Identifier is treated per-scheme; the per-scheme rules below specify canonicalisation. The ?<parameters> suffix carries scheme-specific qualifiers (e.g. cci-xm:evm:mainnet:0x…?jurisdiction=US). Unknown parameters MUST be ignored by readers, MUST NOT cause rejection, and MUST NOT be silently stripped when forwarding the reference.
+- A Scheme MUST start with a lowercase ASCII letter and MAY include lowercase ASCII letters, digits, and hyphens thereafter. Underscores are reserved for future use and MUST NOT appear in v0.1 scheme names.
+- Parsers MUST treat Scheme case-insensitively on read and SHOULD emit lowercase on write.
+- Identifier is treated per-scheme; the per-scheme rules below specify canonicalisation.
+- The ?<parameters> suffix carries scheme-specific qualifiers (e.g. cci-xm:evm:mainnet:0x…?jurisdiction=US). Unknown parameters MUST be ignored by readers, MUST NOT cause rejection, and MUST NOT be silently stripped when forwarding the reference.
+
 **Canonical form and identity (rules CF-2, CF-3).** A ClaimReference has a *canonical byte form* (the bytes embedded whenever it appears inside a hashed or signed document) and a *canonical identity* (the `(Scheme, Identifier)` pair used for matching, reputation keying, and the §7.3.2 replay defence). Both rules are defined in **CORE §B.1**; CF-2's identifier normalisation uses the per-scheme identifier rules below.
 
 **Registered schemes (v0.1) — two-axis registry**
 The v0.1 scheme registry is organised along two axes: (a) **CCI-native** schemes — one per Demos CCI context, with the identifier directly addressing the relevant slot in GCRMain.identities; (b) **Stor-backed credential** schemes — schemes whose verification result is anchored as a Storage Program written by a DACS-2 attestation.
+
 **CCI-native schemes** — map to Demos CCI contexts (8 in production today + 6 to-add for DACS-1 v0.1):
 
 | Scheme | CCI context | Identifier shape | Status |
@@ -72,11 +78,14 @@ The v0.1 scheme registry is organised along two axes: (a) **CCI-native** schemes
 | cci-cmmc:<cert-id> | cmmc (NEW) | as-issued | GCR routine to build |
 
 The six new contexts (lei, finra-crd, sam-uei, fedramp, naics, cmmc) extend the existing 8-context CCI model with the regulatory identity claims DACS-1 v0.1 needs. Each follows the same pattern as the existing 8 contexts: per-context GCR routine for validation; verified payload stored in GCRMain.identities; readable via the existing wallet/SDK identity surface.
+
 **The DACS-1 / DACS-2 boundary for these claims.** DACS-1 is **registered identity** (what the party stably holds — LEI, FINRA registration, etc., kept in CCI). DACS-2 is **freshness check** (per-session re-verification that the registered claim is still valid right now). The DACS-2 DAHR call against the authority produces the verified result; that result is written into the relevant CCI context (DACS-1 surface) AND referenced from the DACS-2 CompositeVerificationRecord for that session.
+
 **Stor-backed credential schemes (extensibility surface)**
 For credentials Demos has not yet promoted to a native CCI context — future regulatory regimes, jurisdiction-specific identifiers, industry-specific certifications, ad-hoc one-off attestations — DACS-1 allows a Stor-backed scheme of the form:
 stor-cred:<credential-type>:<identifier>
 The Storage Program at stor-{sha256(subject_cci + ":" + credential-type + ":" + identifier)} holds the latest DACS-2 VerifyResult for that (subject, credential) tuple. This is the extensibility mechanism: when a new credential type is needed and there is no native CCI context for it, listings can require a stor-cred:*scheme without waiting for Demos to add a context. When a stor-cred:* scheme sees broad enough use, it SHOULD graduate to a native CCI context per the v2 scheme-addition process.
+
 **Composition and low-stakes schemes**
 
 | Scheme | Identifier shape | Use |
@@ -89,12 +98,14 @@ The Storage Program at stor-{sha256(subject_cci + ":" + credential-type + ":" + 
 
 **Unknown-scheme handling**
 A reader encountering an unknown scheme MUST: preserve the reference verbatim when forwarding; treat the reference as **unverified** for evaluation purposes; NOT silently accept the reference as satisfying a bundle requirement; log or surface the unknown scheme to the calling agent. A reader MAY decline to engage with a bundle that contains an unknown scheme in a required position.
+
 **Adding new schemes (v2 and beyond)**
 The v0.1 scheme registry is closed. New schemes are added in subsequent versions of DACS-1 by: submitting a scheme definition (name, identifier grammar, canonical form, authority, default DACS-2 verification recipe); demonstrating a working DACS-2 recipe; acceptance by the registry steward per the process in chapter 11. Implementations MAY support pre-standard "experimental" schemes prefixed x- (e.g., x-myorg-internal-id); these MUST be treated as unknown by conforming readers unless out-of-band agreement exists.
 
 #### 6.3.2 Identity bundle
 
 An identity bundle is an ordered set of claims a party presents about itself, with verification metadata, plus a presentation signature.
+
 **Schema**
 
 ```
@@ -139,8 +150,17 @@ type PresentationSignature =
   | { kind: "sr1-root"; rootClaim: ClaimReference; aggregateSignature: string }
 ```
 
-SIWD is the preferred presentation. The siwd shape matches the return of provider.request({ method: "wallet_signIn", params: […] }) on the Demos wallet — { message, signature, address } — and is the same EIP-4361-style envelope. Verifiers MUST validate the SIWD signature against the **Demos wallet's signing key** (the wallet that produced `wallet_signIn`). The bundle's primary claim MAY be on any chain (EVM, Solana, …) — it is bound to that wallet through the wallet's verified **CCI / SR-1 cross-chain identity link**, NOT by requiring the primary claim itself to produce the EIP-4361 signature. A verifier MUST confirm the wallet controls the primary claim via that CCI/SR-1 link (the Demos wallet is the identity root that holds the per-chain claims). A primary claim with no CCI link to a SIWD-capable wallet MUST use the `per-claim` or `sr1-root` presentation instead.
-**sr1-root presentation.** When SR-1 cross-substrate identity aggregation is available, a single root key may co-sign every claim in the bundle under an SR-1 aggregate signature, producing one signature that covers the whole bundle. rootClaim names the SR-1 root identity (a CCI primary claim on Demos); aggregateSignature is the SR-1 aggregate signature over the domain-separated payload (§6.3.2 below). Verifiers MUST resolve the root key via SR-1 and verify the aggregate signature against the domain-separated payload `signed_bytes` (§6.3.2). sr1-root is the natural presentation for a party self-binding a single document (a seller signing their own listing, an orchestrator binding multiple per-substrate addresses under one identity) because it avoids the per-claim signature overhead and produces one cryptographic artifact that the rest of the stack can reason about.
+SIWD is the preferred presentation. The siwd shape matches the return of provider.request({ method: "wallet_signIn", params: […] }) on the Demos wallet — { message, signature, address } — and is the same EIP-4361-style envelope. The rules:
+
+- Verifiers MUST validate the SIWD signature against the **Demos wallet's signing key** (the wallet that produced `wallet_signIn`).
+- The bundle's primary claim MAY be on any chain (EVM, Solana, …). It is bound to that wallet through the wallet's verified **CCI / SR-1 cross-chain identity link**, NOT by requiring the primary claim itself to produce the EIP-4361 signature.
+- A verifier MUST confirm the wallet controls the primary claim via that CCI/SR-1 link; the Demos wallet is the identity root that holds the per-chain claims.
+- A primary claim with no CCI link to a SIWD-capable wallet MUST use the `per-claim` or `sr1-root` presentation instead.
+
+**sr1-root presentation.** When SR-1 cross-substrate identity aggregation is available, a single root key may co-sign every claim in the bundle under an SR-1 aggregate signature, producing one signature that covers the whole bundle. rootClaim names the SR-1 root identity (a CCI primary claim on Demos); aggregateSignature is the SR-1 aggregate signature over the domain-separated payload (§6.3.2 below). Verifiers MUST resolve the root key via SR-1 and verify the aggregate signature against the domain-separated payload `signed_bytes` (§6.3.2).
+
+> **Note (non-normative).** sr1-root is the natural presentation for a party self-binding a single document (a seller signing their own listing, an orchestrator binding multiple per-substrate addresses under one identity): it avoids the per-claim signature overhead and produces one cryptographic artifact the rest of the stack can reason about.
+
 **Domain-separated payload.** All four presentation kinds bind to the same payload:
 
 `signed_bytes := "dacs-bundle-presentation:v1:" || bundle_hash`
@@ -148,12 +168,31 @@ SIWD is the preferred presentation. The siwd shape matches the return of provide
 - **per-claim** — each per-claim signature signs `signed_bytes` (not the raw bundle hash).
 - **session-key** — the session key signs `signed_bytes`; if `rootBinding` is set, the root key additionally signs `"dacs-session-binding:v1:" || session_key || bundle_hash`.
 - **sr1-root** — the SR-1 aggregate signature signs `signed_bytes`; verifiers reconstruct the SR-1 aggregate from the `rootClaim`'s sub-identity set and verify against `signed_bytes`.
-- **siwd** — the wallet signs the SIWD message, which MUST carry `signed_bytes` as an EIP-4361 `Resources` entry in the exact form `dacs:<hex>`, where `<hex>` is the lowercase-hex encoding of the full `signed_bytes` — i.e. `dacs:` followed by `hex("dacs-bundle-presentation:v1:" || bundle_hash)`, with the `dacs-bundle-presentation:v1:` prefix carried INSIDE the hashed-and-hex-encoded bytes, NOT in the URI scheme path. A bare hex value MUST NOT be emitted on its own (it is not a valid RFC 3986 URI, and a strict EIP-4361 parser would reject the whole SIWD message); only the `dacs:<hex>` form is conformant. The SIWD signature thereby transitively binds to the same payload (the message is the SIWD envelope; the `Resources` entry carries the bundle binding). This is the exact Resource string the reference `docs/flow-trace.md` emits and re-derives for its `bundle.presentation.message.includes(expectedResource)` SIWD check, so the normative text and the reference implementation produce byte-identical resources.
-**Session nonce binding.** `presentedAt` is always present (a required schema field). A bundle presented in the context of a specific session SHOULD additionally carry a session-binding nonce. The nonce is conveyed via the SIWD message’s Nonce field (per EIP-4361) or, for per-claim and session-key presentations, via the top-level `sessionNonce` field on the IdentityBundle (which therefore enters `bundle_hash` and is covered by the presentation signature for those kinds). A verifier in a session context MUST check that the bundle’s `sessionNonce` (or SIWD Nonce) matches the session’s expected nonce, and MUST reject a session-context presentation that carries no session nonce. (For SIWD the nonce lives in the omitted `presentation` field and so is not in `bundle_hash`; the verifier's nonce-match check above is the binding for that kind and is therefore a MUST, not advisory.) Bundles presented without session-nonce binding are usable only outside session contexts (e.g., listing publication where the bundle is the seller’s own self-binding to the listing).
+- **siwd** — the wallet signs the SIWD message, which MUST carry `signed_bytes` as an EIP-4361 `Resources` entry in the exact form `dacs:<hex>`:
+  - `<hex>` is the lowercase-hex encoding of the full `signed_bytes` — i.e. `dacs:` followed by `hex("dacs-bundle-presentation:v1:" || bundle_hash)`. The `dacs-bundle-presentation:v1:` prefix is carried INSIDE the hashed-and-hex-encoded bytes, NOT in the URI scheme path.
+  - A bare hex value MUST NOT be emitted on its own; it is not a valid RFC 3986 URI, and a strict EIP-4361 parser would reject the whole SIWD message. Only the `dacs:<hex>` form is conformant.
+  - The SIWD signature thereby transitively binds to the same payload: the message is the SIWD envelope; the `Resources` entry carries the bundle binding.
+
+  > **Note (non-normative).** This is the exact Resource string the reference `docs/flow-trace.md` emits and re-derives for its `bundle.presentation.message.includes(expectedResource)` SIWD check, so the normative text and the reference implementation produce byte-identical resources.
+
+**Session nonce binding.** `presentedAt` is always present (a required schema field). A bundle presented in the context of a specific session SHOULD additionally carry a session-binding nonce:
+
+- The nonce is conveyed via the SIWD message’s Nonce field (per EIP-4361) or, for per-claim and session-key presentations, via the top-level `sessionNonce` field on the IdentityBundle — which therefore enters `bundle_hash` and is covered by the presentation signature for those kinds.
+- A verifier in a session context MUST check that the bundle’s `sessionNonce` (or SIWD Nonce) matches the session’s expected nonce, and MUST reject a session-context presentation that carries no session nonce.
+- For SIWD the nonce lives in the omitted `presentation` field and so is not in `bundle_hash`; the verifier's nonce-match check above is the binding for that kind and is therefore a MUST, not advisory.
+- Bundles presented without session-nonce binding are usable only outside session contexts (e.g., listing publication where the bundle is the seller’s own self-binding to the listing).
+
 **Canonical serialisation**
 A bundle's canonical form is the RFC 8785 JCS serialisation of the bundle with the `presentation` field omitted. The bundle hash is `sha256(canonical_form)`, hex-encoded. The domain-separated `signed_bytes` (above) is what the presentation signature actually signs. Verifiers MUST recompute both the canonical form and the domain-separated payload when validating.
 
-**SIWD bundle-binding check.** For the `siwd` kind specifically, the verifier MUST parse the SIWD `message` and confirm its `Resources` list contains the URI `dacs:<hex>` where `<hex>` is the verifier's independently-recomputed lowercase-hex of `signed_bytes` (= `hex("dacs-bundle-presentation:v1:" || bundle_hash)`); a missing or mismatched binding URI MUST cause rejection. (Otherwise a captured SIWD `{message, signature, address}` whose wallet controls the same primary claim could be reattached to a different bundle — the SIWD signature alone proves the wallet signed *some* message, not that it committed to *this* bundle.) The comparison is exact string equality against the single `dacs:<hex>` form above (a bare hex string or any other wrapping MUST NOT be accepted, so two implementations cannot diverge on the encoding); if the message carries multiple `Resources` entries, at least one MUST equal it.
+**SIWD bundle-binding check.** For the `siwd` kind specifically:
+
+- The verifier MUST parse the SIWD `message` and confirm its `Resources` list contains the URI `dacs:<hex>`, where `<hex>` is the verifier's independently-recomputed lowercase-hex of `signed_bytes` (= `hex("dacs-bundle-presentation:v1:" || bundle_hash)`). A missing or mismatched binding URI MUST cause rejection.
+- The comparison is exact string equality against the single `dacs:<hex>` form above. A bare hex string or any other wrapping MUST NOT be accepted, so two implementations cannot diverge on the encoding.
+- If the message carries multiple `Resources` entries, at least one MUST equal it.
+
+> **Note (non-normative).** Without this check, a captured SIWD `{message, signature, address}` whose wallet controls the same primary claim could be reattached to a different bundle — the SIWD signature alone proves the wallet signed *some* message, not that it committed to *this* bundle.
+
 **Claim tiers.** Claims rank by how much real-world cost and accountability backs the identity (highest → lowest). A tier counts **only when the claim is verified-and-fresh** (a passing, in-window `verifiedBy`); an unverified or stale claim falls to the bottom tier.
 
 | Tier | Schemes |
@@ -163,12 +202,17 @@ A bundle's canonical form is the RFC 8785 JCS serialisation of the bundle with t
 | 3 — platform identifier | verified `domain`, OAuth / platform accounts |
 | 4 — plain signing key | `key` (and any unverified or stale claim) |
 
-This ranking governs the `presentedBy` selection below — which primary claim to present, by scheme strength. The §6.3.2.1 `identityTier` derivation uses it only for the top level (a verified **tier-1** claim → `institutional`) and otherwise keys on *verification status*, not scheme tier: any other **verified** claim → `verified`, and **no** verified claim → `self-declared` (so a verified `key:` is `verified`, despite being the lowest presentedBy tier). The two rankings answer different questions — scheme strength vs verification status.
+This ranking governs the `presentedBy` selection below — which primary claim to present, by scheme strength. The §6.3.2.1 `identityTier` derivation uses it only for the top level (a verified **tier-1** claim → `institutional`) and otherwise keys on *verification status*, not scheme tier: any other **verified** claim → `verified`, and **no** verified claim → `self-declared`. So a verified `key:` is `verified`, despite being the lowest presentedBy tier. The two rankings answer different questions — scheme strength vs verification status.
 
 **presentedBy selection rule**
-presentedBy MUST be one of the claim references appearing in `claims` (matching by canonical scheme and identifier). If the listing's `BundleRequirement.primaryClaimSelector` is set, the presenter SHOULD select the highest-tier claim of the matching scheme; if no selector is set, the presenter SHOULD select the highest-tier claim available, per the **Claim tiers** table above. Readers MUST accept any `presentedBy` value that resolves to a claim in `claims`; a reader MAY prefer a higher-tier alternative for display or reputation lookup but MUST NOT reject a bundle solely because `presentedBy` is not the highest-tier claim.
+- presentedBy MUST be one of the claim references appearing in `claims` (matching by canonical scheme and identifier).
+- If the listing's `BundleRequirement.primaryClaimSelector` is set, the presenter SHOULD select the highest-tier claim of the matching scheme. If no selector is set, the presenter SHOULD select the highest-tier claim available, per the **Claim tiers** table above.
+- Readers MUST accept any `presentedBy` value that resolves to a claim in `claims`. A reader MAY prefer a higher-tier alternative for display or reputation lookup but MUST NOT reject a bundle solely because `presentedBy` is not the highest-tier claim.
 
-**Verified-presentedBy for reputation.** Reputation MUST NOT be keyed against an unverified `presentedBy` claim, regardless of whether `primaryClaimSelector` is set: if the resolved `presentedBy` claim has a verifiable scheme but lacks a passing **and fresh** `verifiedBy` (stale per the §6.3.2 freshness gate counts as not-currently-verified), consumers MUST treat it as the lowest (plain signing-key) tier for reputation purposes (or reject) — so an unverified-or-stale high-tier identifier (e.g. an `lei:` the presenter does not control, or one whose verification has gone stale) cannot launder reputation onto itself. The MA-3 verified-presentedBy check (§6.3.3) enforces this at match time when a selector is set; this rule extends the same protection to the no-selector case where reputation still keys on `presentedBy` (§6.6, §10.5.2).
+**Verified-presentedBy for reputation.** Reputation MUST NOT be keyed against an unverified `presentedBy` claim, regardless of whether `primaryClaimSelector` is set. If the resolved `presentedBy` claim has a verifiable scheme but lacks a passing **and fresh** `verifiedBy` (stale per the §6.3.2 freshness gate counts as not-currently-verified), consumers MUST treat it as the lowest (plain signing-key) tier for reputation purposes, or reject.
+
+> **Note (non-normative).** This stops an unverified-or-stale high-tier identifier (e.g. an `lei:` the presenter does not control, or one whose verification has gone stale) from laundering reputation onto itself. The MA-3 verified-presentedBy check (§6.3.3) enforces this at match time when a selector is set; this rule extends the same protection to the no-selector case where reputation still keys on `presentedBy` (§6.6, §10.5.2).
+
 **Verification reference resolution.** For a BundleClaim with `verifiedBy` present, the reader runs these checks in order; **any failure makes the claim unverified** for evaluation against bundle requirements:
 
 1. **Fetch** the VerifyResult from `VerifyResultRef.anchor.locator` (the indicated kind).
@@ -184,6 +228,7 @@ presentedBy MUST be one of the claim references appearing in `claims` (matching 
 - **Fail-closed** — if `VerifyResult.validUntil < verifiedAt`, or `verifiedAt` is absent/non-numeric, the window is undeterminable and the claim MUST be treated as stale. (When `verifiedBy` is absent there is no authority window and the §6.3.2 fail-closed default applies.)
 **Staleness**
 A `verifiedBy` reference is **stale** when `now >` the effective expiry from the **Freshness window** above (`verifiedAt`/`validUntil` are unix ms; `defaultMaxAgeSec` is seconds → ×1000). This is the same `validUntil`-aware window VP-C1 uses for reuse (§7.6.1), so the freshness and reuse rules agree. When `verifiedBy` is absent or its window is undeterminable, the reference MUST be treated as stale (fail-closed) — an unknown age MUST NOT pass the freshness gate. A stale verification MUST be refreshed during the Vet stage (DACS-2) for any claim required by the listing's BundleRequirement.
+
 **Conformance — bundles**
 A conforming bundle **producer** MUST:
 - (BP-1) produce JCS-canonical serialisation for hashing and signing;
@@ -195,8 +240,15 @@ A conforming bundle **reader** MUST:
 - (BR-2) reject a bundle whose presentation signature does not verify;
 - (BR-3) reject a bundle in which a required (per listing) claim has a missing or invalid `verifiedBy` when `verificationRequired = true`;
 - (BR-4) treat claims with unknown schemes as unverified;
-- (BR-5) when the listing sets `primaryClaimSelector`, reject a bundle whose `presentedBy` claim is not itself verified-and-fresh (missing/failing `verifiedBy`, or stale per the §6.3.2 freshness gate), even when its scheme matches the selector — see the §6.3.3 match() step that enforces this, preventing tier-laundering where an unverified or stale primary claim rides on separately-verified required claims.
-**Selective disclosure (scope note).** v0.1 provides no per-claim selective-disclosure mechanism at the bundle layer: there is no per-claim blinding, no commitment-with-open-on-demand, and no proof-of-possession-without-disclosure for a claim a listing did not require. A verifier that receives a bundle sees every claim in `claims[]`, and the `presentedBy` primary claim is always disclosed and is the cross-session correlator used for reputation and audit (§6.4 Rationale, §6.3.4). The DACS-2 zkTLS / TLSNotary methods (§7.3.3 tlsnotary, §7.3.4 zktls) protect the secret *inside* a claim's verification; they do NOT conceal *which* claims a party holds from a counterparty. The only minimisation available in v0.1 is presenter-side: a presenter MAY publish a bundle containing only the claims a given listing requires, accepting that the primary claim remains linkable across presentations. Implementers MUST NOT treat DACS-1 + a privacy-preserving DACS-2 method as an end-to-end selective-disclosure guarantee. Blinded / minimised-claim presentation is a named follow-on item (§11.2.7).
+- (BR-5) when the listing sets `primaryClaimSelector`, reject a bundle whose `presentedBy` claim is not itself verified-and-fresh (missing/failing `verifiedBy`, or stale per the §6.3.2 freshness gate), even when its scheme matches the selector. The §6.3.3 match() step enforces this, preventing tier-laundering where an unverified or stale primary claim rides on separately-verified required claims.
+**Selective disclosure (scope note).** v0.1 provides no per-claim selective-disclosure mechanism at the bundle layer: there is no per-claim blinding, no commitment-with-open-on-demand, and no proof-of-possession-without-disclosure for a claim a listing did not require. Concretely:
+
+- A verifier that receives a bundle sees every claim in `claims[]`; the `presentedBy` primary claim is always disclosed and is the cross-session correlator used for reputation and audit (§6.4 Rationale, §6.3.4).
+- The DACS-2 zkTLS / TLSNotary methods (§7.3.3 tlsnotary, §7.3.4 zktls) protect the secret *inside* a claim's verification; they do NOT conceal *which* claims a party holds from a counterparty.
+- The only minimisation available in v0.1 is presenter-side: a presenter MAY publish a bundle containing only the claims a given listing requires, accepting that the primary claim remains linkable across presentations.
+- Implementers MUST NOT treat DACS-1 + a privacy-preserving DACS-2 method as an end-to-end selective-disclosure guarantee.
+
+Blinded / minimised-claim presentation is a named follow-on item (§11.2.7).
 
 #### 6.3.2.1 Identity tier derivation (optional, deterministic)
 
@@ -312,12 +364,14 @@ find_claim(bundle, cr):
 ```
 
 scheme_specific_match is defined per scheme in DACS-2 recipes. Where parameters are unrecognised, readers MUST treat the requirement as unmatched (not silently passed).
+
 **Failure mode and selector semantics**
 A BundleRequirement that does not match MUST cause the buyer or seller to refuse to advance the transaction past the Vet stage. v0.1 specifies no downgrade or renegotiation path. The primaryClaimSelector controls which claim’s identifier is used as the reputation key in DACS-5 and the counterparty identifier of record for audit purposes. Listings that handle regulated flows SHOULD set primaryClaimSelector to an authority-issued scheme (e.g., lei) to ensure reputation accumulates against a stable, externally-verifiable identifier rather than a session key.
 
 #### 6.3.4 Service listing
 
 The listing is the canonical contract for a transaction.
+
 **Schema**
 
 ```
@@ -375,7 +429,9 @@ type ListingTerms = {
 }
 ```
 
-**`cancellationPolicy` is informational-only in v0.1.** The field MAY be advertised, but v0.1 gives it no enforced representation: there is no `cancelled` SessionState or AttestationBundle `outcome`, and a session that ends before completion records `aborted-by-self` / `aborted-by-other` per §10.3.1 regardless of any advertised policy. Counterparties MUST NOT treat an advertised `pre-commit` / `with-fee` policy as a binding, reputation-neutral exit in v0.1; the §10.3.1 abort semantics (and their §10.5 reputation treatment) govern. A first-class, reputation-neutral `cancelled` outcome — honouring a pre-agreed cancellation without it reading as a fault — is a roadmap candidate (it composes with the ST-3 "withdrawal is a right" framing).
+**`cancellationPolicy` is informational-only in v0.1.** The field MAY be advertised, but v0.1 gives it no enforced representation: there is no `cancelled` SessionState or AttestationBundle `outcome`, and a session that ends before completion records `aborted-by-self` / `aborted-by-other` per §10.3.1 regardless of any advertised policy. Counterparties MUST NOT treat an advertised `pre-commit` / `with-fee` policy as a binding, reputation-neutral exit in v0.1; the §10.3.1 abort semantics (and their §10.5 reputation treatment) govern.
+
+> **Note (non-normative).** A first-class, reputation-neutral `cancelled` outcome — honouring a pre-agreed cancellation without it reading as a fault — is a roadmap candidate; it composes with the ST-3 "withdrawal is a right" framing.
 
 ```
 type ListingSignature = {
@@ -386,6 +442,7 @@ type ListingSignature = {
 ```
 
 DeliverableSpec, PricingSpec, and PaymentRailRef are normatively defined in chapter 9 (DACS-4). PhaseStep is defined below. A listing MUST use types that conform to the cited specs.
+
 **PhaseStep schema**
 
 ```
@@ -407,14 +464,35 @@ type PhaseType =
   | "rate"
 ```
 
-Per-kind parameter shapes are normative in the owning chapter: vet-credentials — no parameters; negotiate-fixed-price — no parameters; negotiate-rfq — {maxTurns, timeoutSec, channelSubnet?, rfqInitiator?} per chapter 8; negotiate-sealed-envelope — {commitDeadline, revealWindow, selectionRule, channelSubnet?} per chapter 8; commit-agreement — no parameters; pay-*— {rail: string} (railId) per chapter 9; deliver-* — no parameters (details come from the listing’s DeliverableSpec); rate — optional {required?: boolean} per chapter 10.
+Per-kind parameter shapes are normative in the owning chapter:
+
+| Phase kind | Parameters | Owning chapter |
+| --- | --- | --- |
+| vet-credentials | none | 7 |
+| negotiate-fixed-price | none | 8 |
+| negotiate-rfq | {maxTurns, timeoutSec, channelSubnet?, rfqInitiator?} | 8 |
+| negotiate-sealed-envelope | {commitDeadline, revealWindow, selectionRule, channelSubnet?} | 8 |
+| commit-agreement | none | 8 |
+| pay-* | {rail: string} (railId) | 9 |
+| deliver-* | none (details come from the listing’s DeliverableSpec) | 9 |
+| rate | optional {required?: boolean} | 10 |
+
 **Canonical serialisation and signature**
 A listing’s canonical form is the RFC 8785 JCS serialisation with the signature field omitted. The listing hash is sha256(canonical_form), hex-encoded. The signature.value is computed over the domain-separated payload per §B.7:
 signed_bytes := "dacs-listing:v1:" || listing_hash
-Verifiers MUST: recompute the canonical form, listing hash, and domain-separated signed bytes; resolve signature.signer to the corresponding key (via seller.identity.claims, then via DACS-2 verification if a verifiable identifier); verify the signature against signed_bytes. If signature.algorithm is sr1-aggregate, the signer’s IdentityBundle.presentation MUST be of kind sr1-root and the signature is the SR-1 root signature over signed_bytes (the SR-1 aggregate signature scheme applies to the same domain-separated payload, not directly to the listing hash).
+Verifiers MUST:
+
+- recompute the canonical form, listing hash, and domain-separated signed bytes;
+- resolve signature.signer to the corresponding key (via seller.identity.claims, then via DACS-2 verification if a verifiable identifier);
+- verify the signature against signed_bytes.
+
+If signature.algorithm is sr1-aggregate, the signer’s IdentityBundle.presentation MUST be of kind sr1-root and the signature is the SR-1 root signature over signed_bytes — the SR-1 aggregate signature scheme applies to the same domain-separated payload, not directly to the listing hash.
+
 **Anchoring and size limits**
 A listing MUST be anchored using SR-2.
+
 **Logical address vs native address.** DACS specifies a *logical* address pattern for each artifact kind. The logical pattern for a listing is dacs1:{sellerPrimaryClaim}:{listingId}:v{listingVersion}. The logical pattern is a stable, substrate-independent identifier the protocol reasons about; it is not necessarily the literal string the substrate accepts as an address. Each substrate-binding section specifies how the logical pattern maps to the substrate’s native addressing.
+
 **Demos binding.** On Demos, the substrate’s StorageProgram addressing requires colon-free names and resolves writes to a sha256-derived handle of the form stor-<hex>. The Demos binding for a DACS listing therefore is:
 
 ```
@@ -425,16 +503,38 @@ storageProgramName := colon-free encoding of logical_address   // Demos rejects 
 native_address     := "stor-" + first40hex( sha256( deployerAddress + ":" + storageProgramName + ":" + nonce + ":" + salt ) )
 ```
 
-Because the derivation folds in the **deployer address** and the **per-write transaction nonce** (and truncates to 40 hex / 160 bits), the native address is **not** recomputable from the logical address alone — this is the write-input-mapping case of the front-matter universal rule. Implementations on Demos MUST therefore: (a) anchor at native_address; (b) carry logical_address (in CF-4-encoded form) as descriptive metadata on the anchored record; and (c) publish the logical→native binding via the listings index (§6.3.5) and catalog (§6.3.6). Consumers resolve a listing by looking up native_address for the logical_address through the published binding, then reading the StorageProgram at native_address and verifying the content hash. The anchor transaction (the on-chain write) is the canonical pointer; the substrate’s native address is the addressable handle.
+Because the derivation folds in the **deployer address** and the **per-write transaction nonce** (and truncates to 40 hex / 160 bits), the native address is **not** recomputable from the logical address alone — this is the write-input-mapping case of the front-matter universal rule. Implementations on Demos MUST therefore:
+
+- (a) anchor at native_address;
+- (b) carry logical_address (in CF-4-encoded form) as descriptive metadata on the anchored record;
+- (c) publish the logical→native binding via the listings index (§6.3.5) and catalog (§6.3.6).
+
+Consumers resolve a listing by looking up native_address for the logical_address through the published binding, then reading the StorageProgram at native_address and verifying the content hash. The anchor transaction (the on-chain write) is the canonical pointer; the substrate’s native address is the addressable handle.
 
 *Forward note.* A future SDK capability to anchor a StorageProgram at a caller-chosen address — or a Demos-native deterministic `logical → native` function that hashes only the logical address — would restore direct recomputation (the pure-mapping case) and let consumers resolve without the published binding. Until then the binding-publication requirement above governs.
 
-**Logical-address delimiter encoding (rule CF-4).** A listing's logical address `dacs1:{sellerPrimaryClaim}:{listingId}:v{listingVersion}` has a colon-bearing variable segment — `sellerPrimaryClaim`, a ClaimReference (e.g. `cci-xm:evm:mainnet:0x1234`) — that is percent-encoded before assembly per **rule CF-4 (CORE §B.1)** (`listingId` is URL-safe ASCII, so it carries no reserved delimiters). CF-4 governs only the address *string*'s reversible parseability; how it maps to a substrate's *native* address is governed by the §"Logical vs native addresses" universal rule and, for Demos, the Demos-binding block above. The CF-4 table in CORE §B.1 enumerates the variable vs fixed segments for every `dacsN:` address kind across the stack.
+**Logical-address delimiter encoding (rule CF-4).** A listing's logical address `dacs1:{sellerPrimaryClaim}:{listingId}:v{listingVersion}` has a colon-bearing variable segment — `sellerPrimaryClaim`, a ClaimReference (e.g. `cci-xm:evm:mainnet:0x1234`) — that is percent-encoded before assembly per **rule CF-4 (CORE §B.1)**; `listingId` is URL-safe ASCII, so it carries no reserved delimiters. CF-4 governs only the address *string*'s reversible parseability. How it maps to a substrate's *native* address is governed by the §"Logical vs native addresses" universal rule and, for Demos, the Demos-binding block above. The CF-4 table in CORE §B.1 enumerates the variable vs fixed segments for every `dacsN:` address kind across the stack.
+
 Substrates MAY use equivalent addressing schemes; the requirement is that any party with substrate access can dereference an anchor reference to the canonical content and verify the content hash.
+
 **Size cap.** The canonical JSON form of a listing MUST NOT exceed 16,384 bytes (16 KB). Listings exceeding the cap MUST use the extendedDescriptionUrl + extendedDescriptionHash pattern to host verbose offering descriptions externally with content-hash binding. The cap applies after canonicalisation; the actual on-chain payload size may differ slightly due to substrate encoding. On substrates whose SR-2 implementation has a smaller per-record cap, the substrate cap governs (the lesser of 16 KB and the substrate cap). Implementations MUST reject listings exceeding the applicable cap at the validation step (LR-2).
+
 **Versioning, immutability, revocation**
-Each listingVersion is independently anchored. Prior versions MUST remain readable. A new version supersedes prior versions for new sessions; sessions already past commit-agreement (DACS-3) MUST continue against their pinned version. listingVersion MUST be monotonically increasing per listingId. Versions MUST NOT be skipped.
-A seller MAY revoke a listing version by anchoring a revocation marker at the address dacs1-revoked:{sellerPrimaryClaim}:{listingId}:v{listingVersion} with value {listingId, listingVersion, listingContentHash, revokedAt, reason?, signature} signed by the same key that signed the listing. The `signature` is over the domain-separated payload `signed_bytes := "dacs-revocation:v1:" || sha256(canonical({listingId, listingVersion, listingContentHash, revokedAt, reason?}))` (per §B.7). The marker MUST carry `listingId`, `listingVersion`, and `listingContentHash` (the `contentHash` of the revoked listing version), and a reader MUST confirm all three match the listing it is checking before honouring the revocation — so a captured marker cannot be replayed to revoke a different listing (the anchor address alone is not a sufficient binding, since on Demos it is a write-input-derived native address, §6.3.4). Readers MUST check for the revocation marker before initiating a new session. Sessions already past commit-agreement MUST NOT be invalidated by revocation.
+Versioning rules:
+
+- Each listingVersion is independently anchored. Prior versions MUST remain readable.
+- A new version supersedes prior versions for new sessions; sessions already past commit-agreement (DACS-3) MUST continue against their pinned version.
+- listingVersion MUST be monotonically increasing per listingId. Versions MUST NOT be skipped.
+
+**Revocation.** A seller MAY revoke a listing version by anchoring a revocation marker at the address dacs1-revoked:{sellerPrimaryClaim}:{listingId}:v{listingVersion} with value {listingId, listingVersion, listingContentHash, revokedAt, reason?, signature} signed by the same key that signed the listing. The rules:
+
+- The `signature` is over the domain-separated payload `signed_bytes := "dacs-revocation:v1:" || sha256(canonical({listingId, listingVersion, listingContentHash, revokedAt, reason?}))` (per §B.7).
+- The marker MUST carry `listingId`, `listingVersion`, and `listingContentHash` (the `contentHash` of the revoked listing version). A reader MUST confirm all three match the listing it is checking before honouring the revocation.
+- Readers MUST check for the revocation marker before initiating a new session.
+- Sessions already past commit-agreement MUST NOT be invalidated by revocation.
+
+> **Note (non-normative).** The three-field match means a captured marker cannot be replayed to revoke a different listing; the anchor address alone is not a sufficient binding, since on Demos it is a write-input-derived native address (§6.3.4).
+
 **Validation order for readers**
 Readers MUST validate listings in the following order, **halting on the first failure**:
 
@@ -502,12 +602,14 @@ type ListingIndexEntry = {
 ```
 
 The index MAY itself be anchored via SR-2; if so, the well-known block’s anchor field MUST point to it. The indexHash field in the well-known block enables clients to detect stale caches. Clients MUST cross-check each ListingIndexEntry.anchor independently before engaging with a listing; the index is for discovery convenience, not a source of truth.
+
 **Interoperability with A2A; update and revocation**
 The dacs block is additive. A2A-only clients ignore the dacs field. DACS-aware clients use the dacs field for listing discovery; absence of the field MUST be interpreted as "this agent does not publish DACS listings via well-known" (the agent MAY still have listings discoverable via a catalog API). Sellers update by re-publishing listings.json with new entries and updated generatedAt; the well-known indexHash MUST be updated to match. Revocation removes the entry from the index AND publishes the on-chain revocation marker.
 
 #### 6.3.6 Discovery — catalog API
 
 A DACS catalog is an off-chain index aggregating listings across many sellers, providing search, filtering, and discovery.
+
 **Endpoints**
 
 ```
@@ -536,6 +638,7 @@ GET /api/dacs/sellers/{primaryClaimRef}
 ```
 
 primaryClaimRef is URL-encoded canonical form (e.g., lei%3A984500ABCDEF12345678).
+
 **ListingSummary, caching, authentication, cross-reference**
 
 ```
@@ -617,31 +720,56 @@ Read endpoints MUST NOT require authentication. Write/registration semantics are
 ### 6.4 Rationale
 
 **Identity-as-bundle vs single-rooted identifier.** A single-root model forces every listing onto one primitive — either too weak for institutional flows (a signing key) or infeasible for micropayments (an LEI). The bundle model lets each listing declare its own minimum and each counterparty present what it holds. Reputation keys against the bundle's *primary* claim so a party accumulates separate reputation per tier — preventing a strong signing-key reputation from laundering into a fresh LEI presentation.
+
 **Closed scheme registry in v0.1 vs open.** An open registry fragments: parsers can't validate bundles without runtime-loaded recipes and conformance becomes untestable. v0.1 ships a fixed high-volume set (LEI, FINRA-CRD, SAM-UEI, FedRAMP, NAICS, CMMC, plus self-sovereign and platform identifiers); new schemes ship via subsequent minor versions under the steward, and `x-` experimental prefixes are the out-of-band escape valve.
+
 **Listing as full JSON vs hash-only.** Full anchoring lets any party with substrate access retrieve and verify the binding contract without off-chain dependency. The cost is on-chain size; the 16 KB cap (§6.3.4) keeps anchoring cheap while the `extendedDescriptionUrl` + hash pattern carries verbose content. Listings whose essential terms exceed 16 KB are a v2 concern; v0.1 treats the cap as a forcing function toward simplicity.
+
 **Discovery via `.well-known/agent.json` extension.** An additive `dacs` block preserves A2A interoperability and reuses a deployed pattern; a separate surface would duplicate publishing and create ambiguity.
+
 **Catalog API off-chain vs on-chain.** The chain holds listings (source of truth); off-chain catalogs index for performance. An on-chain catalog would centralise discovery while being slower and costlier. Competing catalogs may coexist; clients always dereference to chain for the binding artifact.
+
 **SR-1 optional vs required.** Requiring SR-1 would block DACS-1 on substrates without cross-substrate identity aggregation (most EVM chains). Optional SR-1 lets DACS-1 ship anywhere with anchored storage, adding single-signature convenience where supported.
+
 **Per-claim verification references (`verifiedBy`).** A claim without one is a self-assertion — fine for low stakes, not load-bearing for high. The rest of the stack references *verifications*, not raw claims, when stakes matter.
+
 **Cost model.** DACS-1 assumes SR-2 anchored storage is economically viable up to the soft size limit (trivially true on Demos / L2s / IPFS+L1-anchored-hash; not on Ethereum L1). High-cost substrates SHOULD use the `extendedDescriptionUrl` + hash pattern aggressively and anchor only essential fields.
 
 ### 6.5 Backwards compatibility
 
 **ERC-8004.** A listing's claims MAY include an `erc8004` claim referencing an Ethereum identity-registry token, verified via the chapter-7 `evm-rpc` recipe (a proxy-attested call confirming the token owner). Its reputation-registry entries MAY additionally surface DACS-5 derivations for EVM consumers, but DACS-1 does not require this.
+
 **W3C DIDs.** `did` claims resolve per the relevant W3C DID method; the recipe varies by method (key material in the DID document → self-signed verification; VC-bound methods → `verifiable-credential`).
+
 **A2A `.well-known/agent.json`.** The `dacs` extension is additive; A2A-only clients ignore it. A DACS-aware client finding no `dacs` block MUST NOT infer the agent has no listings — it MAY fall back to a catalog search.
+
 **W3C Verifiable Credentials.** A claim's `verifiedBy` MAY back to the `verifiable-credential` method; the verifier checks VC signature, issuer, and freshness per the DACS-2 recipe.
+
 **Future identity standards.** New schemes are added via the DACS-1 version process; adding one requires only registry updates, not changes to the bundle, listing, or discovery schemas.
 
 ### 6.6 Security considerations
 
 **Forged listings.** *Threat:* an attacker publishes a listing impersonating a known seller. *Mitigation:* listings are signed; the signer MUST be a key referenced in seller.identity.claims, and the bundle itself MUST verify. A reader following the validation order detects the impersonation at the signature step or the bundle-conformance step.
-**Bundle replay across sessions.** *Threat:* an attacker captures a bundle from one session and replays it in another. *Mitigation:* the presentation signature is over the domain-separated payload "dacs-bundle-presentation:v1:" || bundle_hash, which the presenter generates fresh per session and which is bound to the session-binding nonce when presented in a session context — directly inside `bundle_hash` for the per-claim and session-key kinds (the top-level `sessionNonce` field), and via the verifier's mandatory SIWD Nonce-match plus Resource-line check for the SIWD kind (whose nonce lives in the omitted `presentation` field, §6.3.2). Verifiers in a session context MUST validate the nonce; bundles missing the nonce in a session context MUST be rejected. Replay of an unverified bundle outside a session context is the equivalent of an unverified self-assertion and offers no advantage to the attacker.
+
+**Bundle replay across sessions.** *Threat:* an attacker captures a bundle from one session and replays it in another. *Mitigation:* the presentation signature is over the domain-separated payload "dacs-bundle-presentation:v1:" || bundle_hash, which the presenter generates fresh per session and which is bound to the session-binding nonce when presented in a session context. The binding is direct for the per-claim and session-key kinds (the top-level `sessionNonce` field enters `bundle_hash`), and runs via the verifier's mandatory SIWD Nonce-match plus Resource-line check for the SIWD kind, whose nonce lives in the omitted `presentation` field (§6.3.2). Verifiers in a session context MUST validate the nonce; bundles missing the nonce in a session context MUST be rejected. Replay of an unverified bundle outside a session context is the equivalent of an unverified self-assertion and offers no advantage to the attacker.
+
 **Catalog poisoning.** *Threat:* a catalog returns false listings or omits real ones. *Mitigation:* ListingSummary includes the anchor and contentHash; clients dereference and verify. A poisoned catalog causes UX confusion (a listing that does not exist on chain, or a missing listing) but cannot produce a verifiable false transaction.
+
 **Claim-scheme spoofing.** *Threat:* a bundle includes a claim with a scheme the reader does not understand. *Mitigation:* unknown schemes MUST be treated as unverified. The reader cannot accept the claim as satisfying a required-and-verified bundle requirement.
+
 **Identity-claim substitution between bundle presentation and Vet.** *Threat:* a counterparty presents bundle A in negotiation and bundle B at Vet time. *Mitigation:* the bundle hash is pinned into the session record at presentation time; DACS-2’s Vet stage operates on the pinned bundle. Substitution is detected by hash mismatch.
+
 **Reading a listing after revocation.** *Threat:* a reader has cached a listing and engages without checking for revocation. *Mitigation:* readers MUST check the revocation marker before initiating a new session. Sessions already past commit-agreement are not invalidated by revocation, preserving in-flight obligations.
+
 **Stale bundles in active sessions.** *Threat:* a session runs long enough that a verifiedBy reference becomes stale. *Mitigation:* DACS-2 specifies refresh semantics for required claims. For long-running entitlement sessions, listings SHOULD declare a refresh interval; v0.1 does not standardise this, deferring to DACS-2’s per-recipe defaults.
+
 **Index integrity in .well-known.** *Threat:* a compromised web server publishes a falsified listings.json. *Mitigation:* the indexHash in the well-known block is signed only by the TLS certificate, not by the seller’s identity. Clients SHOULD prefer the index’s anchor (substrate-anchored copy) when available; in any case, individual listings MUST be dereferenced and validated independently.
+
 **Private endpoints and impersonation.** *Threat:* seller.publicEndpoint claims a URL the seller does not control. *Mitigation:* this is a self-claim; readers MUST NOT treat the endpoint as authoritative for any cryptographic purpose. Endpoints are conveniences for off-chain reads, not trust anchors.
-**Key lifecycle.** Every spec assumes a primary key exists per ClaimReference. Implementations MUST hold primary keys in a key-management system that does not retain plaintext at rest (HSM, TEE-backed enclave, or equivalent); support rotation (the relationship between a ClaimReference and its current key may change over time; the DACS-2 recipe for a scheme defines how key-current-ness is resolved); propagate revocation (publish a revocation marker for any listings the key signed, update bundle presentations to use a new key going forward); treat signatures produced by a key after its revocation timestamp as invalid for new sessions; sessions already past commit-agreement using the prior key remain bound (the obligation already exists).
+
+**Key lifecycle.** Every spec assumes a primary key exists per ClaimReference. Implementations MUST:
+
+- hold primary keys in a key-management system that does not retain plaintext at rest (HSM, TEE-backed enclave, or equivalent);
+- support rotation — the relationship between a ClaimReference and its current key may change over time; the DACS-2 recipe for a scheme defines how key-current-ness is resolved;
+- propagate revocation — publish a revocation marker for any listings the key signed, and update bundle presentations to use a new key going forward;
+- treat signatures produced by a key after its revocation timestamp as invalid for new sessions; sessions already past commit-agreement using the prior key remain bound (the obligation already exists).
