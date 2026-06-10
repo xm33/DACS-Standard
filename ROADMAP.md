@@ -53,7 +53,7 @@ The roadmap has two parts:
 
 | Item | Status | Notes |
 |------|--------|-------|
-| 6 new CCI contexts (lei, finra-crd, sam-uei, fedramp, naics, cmmc) | Staged | Institutional DACS-1 conformance is gated on these GCR routines being built. |
+| 6 new CCI contexts (lei, finra-crd, sam-uei, fedramp, naics, cmmc) | Deferred — later version, not v0.1 | Institutional DACS-1 conformance on Demos is gated on these GCR routines being built; until then regulatory credentials are carried via the stor-cred surface (§6.3.1). |
 | DAHR validator-body-signed mode | Anticipated | Strengthens SR-3 beyond hash-commitment; high-stakes recipes (lei, finra-crd, ofac-clear, sam-uei) migrate when it ships (§7.3.5). |
 | Selective / minimised-claim disclosure | Anticipated | v0.1 provides no per-claim selective disclosure at the bundle layer (§11.2.7; scope note §6.3.2). |
 | Encrypted-to-parties anchoring for the identity/vet/audit layer (#68, #78) | Candidate; design-issue first | An `encrypted-anchored` mode (mirroring §8.7's transcript machinery) for AttestationBundles, commit-agreement records, and DACS-2 VerifyResults — encrypt the record to the session parties while keeping the content hash public for tamper-evidence, plus optional **hashed anchor addresses** (`H(jobId‖scheme‖identifier)`) so the address stops enumerating who-screened-whom. Closes the counterparty-graph / vet-attestation exposure that v0.1 accepts by design (§12.1). Heavy: touches verifier behaviour, the §10.4.3 divergence rules, reputation derivation's read of primary claims, and cross-substrate interop — and needs jobId entropy for the hashed-address variant. |

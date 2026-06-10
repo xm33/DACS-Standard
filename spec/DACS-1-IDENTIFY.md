@@ -70,14 +70,14 @@ The v0.1 scheme registry is organised along two axes: (a) **CCI-native** schemes
 | cci-humanpassport:<id> | humanpassport | humanity proof id | Done |
 | cci-ethos:<id> | ethos | Ethos profile id | Done |
 | cci-tlsn:<proof-hash> | tlsn | TLSNotary proof commitment | Done — DACS-2 MUST treat as a CCI claim, NOT as an external tlsnotary method |
-| cci-lei:<20-char> | lei (NEW) | uppercase LEI | GCR routine to build |
-| cci-finra-crd:<digits> | finra-crd (NEW) | digits only, no leading zeros | GCR routine to build |
-| cci-sam-uei:<12-char> | sam-uei (NEW) | uppercase UEI | GCR routine to build |
-| cci-fedramp:<id> | fedramp (NEW) | as-issued | GCR routine to build |
-| cci-naics:<6-digit> | naics (NEW) | digits only | GCR routine to build |
-| cci-cmmc:<cert-id> | cmmc (NEW) | as-issued | GCR routine to build |
+| cci-lei:<20-char> | lei (NEW) | uppercase LEI | Deferred — later version, not v0.1 |
+| cci-finra-crd:<digits> | finra-crd (NEW) | digits only, no leading zeros | Deferred — later version, not v0.1 |
+| cci-sam-uei:<12-char> | sam-uei (NEW) | uppercase UEI | Deferred — later version, not v0.1 |
+| cci-fedramp:<id> | fedramp (NEW) | as-issued | Deferred — later version, not v0.1 |
+| cci-naics:<6-digit> | naics (NEW) | digits only | Deferred — later version, not v0.1 |
+| cci-cmmc:<cert-id> | cmmc (NEW) | as-issued | Deferred — later version, not v0.1 |
 
-The six new contexts (lei, finra-crd, sam-uei, fedramp, naics, cmmc) extend the existing 8-context CCI model with the regulatory identity claims DACS-1 v0.1 needs. Each follows the same pattern as the existing 8 contexts: per-context GCR routine for validation; verified payload stored in GCRMain.identities; readable via the existing wallet/SDK identity surface.
+The six new contexts (lei, finra-crd, sam-uei, fedramp, naics, cmmc) extend the existing 8-context CCI model with regulatory identity claims. **They are deferred to a later version and are not part of v0.1.** Each will follow the same pattern as the existing 8 contexts: per-context GCR routine for validation; verified payload stored in GCRMain.identities; readable via the existing wallet/SDK identity surface. Until they ship, regulatory credentials are carried via the stor-cred extensibility surface below (the scheme grammar, claim tiers, and DACS-2 verification recipes are substrate-independent and unchanged).
 
 **The DACS-1 / DACS-2 boundary for these claims.** DACS-1 is **registered identity** (what the party stably holds — LEI, FINRA registration, etc., kept in CCI). DACS-2 is **freshness check** (per-session re-verification that the registered claim is still valid right now). The DACS-2 DAHR call against the authority produces the verified result; that result is written into the relevant CCI context (DACS-1 surface) AND referenced from the DACS-2 CompositeVerificationRecord for that session.
 
