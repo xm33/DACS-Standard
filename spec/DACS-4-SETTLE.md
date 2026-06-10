@@ -27,7 +27,8 @@ Settlement is the stage where the most working open standards exist. Stablecoin 
 - **ERC-20 / SPL** specify on-chain token transfer — not cross-chain coordination, delivery binding, or evidence.
 - **HTLC contracts** specify atomic cross-chain swaps — coordination only, not the rest of the lifecycle.
 
-DACS-4 composes these standards into a uniform settlement layer. The payment rail registry routes each rail to its appropriate phase handler; the SettlementEvidence shape lets DACS-5 anchor the result regardless of which rail was used; the cross-chain coordination layer extends to settlements that span chains.
+DACS-4 composes these standards into a uniform settlement layer. The payment rail registry routes each rail to its appropriate phase handler. The SettlementEvidence shape lets DACS-5 anchor the result regardless of which rail was used. The cross-chain coordination layer extends to settlements that span chains.
+
 A second motivation is **scope discipline**: DACS-4 does not specify new payment cryptography. It composes existing protocols, adds the registry and evidence schema, and provides cross-chain coordination via substrate primitives (SR-5). The new bytes-on-the-wire are limited to the rail registry, the SettlementEvidence shape, and the phase-handler contracts.
 
 ### 9.3 Shared types
@@ -112,11 +113,21 @@ type ChainTxRef =
   | { kind: "liquidity-tank"; bridgeId: string; sourceChainId: number; destChainId: number; lockTxHash: string; releaseTxHash?: string }
 ```
 
-**Negotiable pricing band (`negotiable`).** `minPct` / `maxPct` are non-negative percentages with `0 ≤ minPct < 100`. The admissible band, its half-up rounding, and its inclusive bounds are defined by §8.5.2 (the listing-conformance check), and a verifier MUST reject a listing whose computed lower bound is ≤ 0. The band is **asymmetric by design**: `minPct < 100` keeps the lower bound positive, but `maxPct` is **intentionally unbounded** (open-ended upside is a legitimate market form). So the band gives **no upper price protection** — a buyer-side orchestrator SHOULD enforce its own acceptance ceiling rather than rely on the band to cap an overcharge.
+**Negotiable pricing band (`negotiable`).** `minPct` / `maxPct` are non-negative percentages with `0 ≤ minPct < 100`. The admissible band, its half-up rounding, and its inclusive bounds are defined by §8.5.2 (the listing-conformance check). A verifier MUST reject a listing whose computed lower bound is ≤ 0. The band is **asymmetric by design**: `minPct < 100` keeps the lower bound positive, but `maxPct` is **intentionally unbounded**. So the band gives **no upper price protection** — a buyer-side orchestrator SHOULD enforce its own acceptance ceiling rather than rely on the band to cap an overcharge.
 
-**DeliverableRef canonical hash.** `DeliverableRef.hash` is `sha256(canonical_form)`, hex — `canonical_form` being the RFC 8785 JCS serialisation of the `DeliverableSpec` (the same rule as every hashed DACS artifact; JCS's lexicographic keys + consistent omitted-vs-present handling make a discriminated-union-with-optional-fields hash reproducible). The load-bearing rule: **both parties MUST compute it over the listing's `offering.deliverable` *as anchored*, not a re-derived copy** — otherwise a trivial formatting / optional-field difference changes the hash and the §8.5.2 check is no longer byte-deterministic.
+> **Note (non-normative).** The unbounded `maxPct` is deliberate: open-ended upside is a legitimate market form.
 
-**PriceTerm.amount positivity (normative).** `PriceTerm.amount` MUST parse to a finite value **strictly greater than zero** (never NaN, infinite, or negative). Implementations MUST reject any bid, listing price, or agreed price whose `amount` is non-positive **before applying `selectionRule` and before commit-agreement** — a violating revealed bid MUST be excluded from the candidate set, not selected. This is load-bearing because `amount` feeds three adversarial consumers — winner-selection (§8.4.3), band validation (§8.5.2), and on-chain amount construction (§9.5.2) — and a zero/negative bid would otherwise **win a `lowest-price` auction**.
+**DeliverableRef canonical hash.** `DeliverableRef.hash` is `sha256(canonical_form)`, hex, where `canonical_form` is the RFC 8785 JCS serialisation of the `DeliverableSpec` — the same rule as every hashed DACS artifact. The load-bearing rule: **both parties MUST compute it over the listing's `offering.deliverable` *as anchored*, not a re-derived copy**. Otherwise a trivial formatting / optional-field difference changes the hash and the §8.5.2 check is no longer byte-deterministic.
+
+> **Note (non-normative).** JCS's lexicographic keys + consistent omitted-vs-present handling are what make a discriminated-union-with-optional-fields hash reproducible.
+
+**PriceTerm.amount positivity (normative).**
+
+- `PriceTerm.amount` MUST parse to a finite value **strictly greater than zero** — never NaN, infinite, or negative.
+- Implementations MUST reject any bid, listing price, or agreed price whose `amount` is non-positive **before applying `selectionRule` and before commit-agreement**.
+- A violating revealed bid MUST be excluded from the candidate set, not selected.
+
+> **Note (non-normative).** This is load-bearing because `amount` feeds three adversarial consumers — winner-selection (§8.4.3), band validation (§8.5.2), and on-chain amount construction (§9.5.2) — and a zero/negative bid would otherwise **win a `lowest-price` auction**.
 
 ### 9.4 Payment rail registry
 
@@ -566,7 +577,11 @@ Seller writes a Storage Program (SR-2) containing the deliverable payload. Addre
 
 Seller issues an EntitlementRecord granting the buyer time-bound access to a service.
 
-**Procedure.** Validates agreement.terms.deliverable.deliverableType == "entitlement"; resolves the entitlement parameters (`durationSec`, `renewable`) from the **DeliverableSpec** — the listing's `offering.deliverable`, bound to the agreement by the §8.5.2 hash check — NOT from `agreement.terms.deliverable`, which is a `DeliverableRef` carrying only `deliverableType` / `hash` / `schemaUrl?` and none of these fields; seller constructs the EntitlementRecord:
+**Procedure.**
+
+1. Validate `agreement.terms.deliverable.deliverableType == "entitlement"`.
+2. Resolve the entitlement parameters (`durationSec`, `renewable`) from the **DeliverableSpec** — the listing's `offering.deliverable`, bound to the agreement by the §8.5.2 hash check. They MUST NOT be resolved from `agreement.terms.deliverable`: that is a `DeliverableRef` carrying only `deliverableType` / `hash` / `schemaUrl?` and none of these fields.
+3. Seller constructs the EntitlementRecord:
 
 ```
 type EntitlementRecord = {
@@ -596,7 +611,13 @@ type EntitlementRecord = {
 }
 ```
 
-Seller signs the EntitlementRecord over the domain-separated payload "dacs-entitlement:v1:" || sha256(canonical_JCS(record_without_signature)) per §B.7; anchors the EntitlementRecord via SR-2 at dacs4:entitlement:{jobId}:{renewalSeq} (renewalSeq = 0 for the original grant); constructs SettlementEvidence; returns success. Buyer presents the EntitlementRecord (or its hash + anchor) at the record's `serviceEndpoint` to access the entitled service — the record is a self-contained receipt (it names the grantee, the scope, the validity window, and where to exercise it), so the buyer needs nothing beyond the record itself. The service endpoint verifies the signature and anchor, checks now is within [startsAt, endsAt], and serves accordingly. `serviceEndpoint` carries *where* to access; how an access **credential / token** is delivered (vs. presenting the record itself as the bearer proof) is an out-of-band auth concern not specified in v0.1 — see roadmap.
+4. Seller signs the EntitlementRecord over the domain-separated payload "dacs-entitlement:v1:" || sha256(canonical_JCS(record_without_signature)) per §B.7.
+5. Seller anchors the EntitlementRecord via SR-2 at dacs4:entitlement:{jobId}:{renewalSeq}, with renewalSeq = 0 for the original grant.
+6. Seller constructs SettlementEvidence; returns success.
+
+**Exercising the entitlement.** Buyer presents the EntitlementRecord (or its hash + anchor) at the record's `serviceEndpoint` to access the entitled service. The record is a self-contained receipt — it names the grantee, the scope, the validity window, and where to exercise it — so the buyer needs nothing beyond the record itself. The service endpoint verifies the signature and anchor, checks now is within [startsAt, endsAt], and serves accordingly.
+
+> **Note (non-normative).** `serviceEndpoint` carries *where* to access. How an access **credential / token** is delivered (vs. presenting the record itself as the bearer proof) is an out-of-band auth concern not specified in v0.1 — see roadmap.
 
 **Renewal.** If renewable: true and the buyer re-pays before endsAt, the seller MAY issue a new EntitlementRecord with extended endsAt, the same jobId, and an **incremented renewalSeq**, anchored at dacs4:entitlement:{jobId}:{renewalSeq}. The renewalSeq discriminator gives each renewal a distinct SR-2 address so it does not collide with or overwrite the original grant (the address is otherwise fully determined by jobId on immutable content-addressed storage). A consumer resolves the current grant by reading the highest renewalSeq present for the jobId.
 
@@ -708,7 +729,10 @@ type ComponentSignature = {
 }
 ```
 
-Every anchored record that carries a `signature: ComponentSignature` field MUST populate it with this shape. The `signer` MUST be a ClaimReference whose role is fixed by the artifact's inline comment, and `value` MUST be the signature over that artifact's domain-separated payload as defined in its section.
+Every anchored record that carries a `signature: ComponentSignature` field MUST populate it with this shape:
+
+- `signer` MUST be a ClaimReference whose role is fixed by the artifact's inline comment;
+- `value` MUST be the signature over that artifact's domain-separated payload as defined in its section.
 
 Canonical form is RFC 8785 JCS of the SettlementEvidence with the signature field omitted. `supersedesEvidenceRef`, when present, is part of the hashed canonical form (only `signature` is omitted), so an ST-8 `:resolved` record's hash binds the interim record it supersedes. Evidence hash is sha256(canonical_form), hex-encoded. The signature is computed over the domain-separated payload per §B.7:
 signed_bytes := "dacs-evidence:v1:" || evidence_hash
@@ -733,14 +757,16 @@ type SettlementAmendment = {
 
 SettlementAmendment is anchored via SR-2 at dacs4:amendment:{jobId}:{evidenceHash}:{amendmentIndex}. The amendment signature is computed over the domain-separated payload "dacs-amendment:v1:" || sha256(canonical_JCS(amendment_without_signature)) per §B.7. The DACS-5 session record includes amendments in the bundle if they arrive before bundle finalisation.
 
-**Amendment validity.** An amendment is meaningless unless it binds to a **real, successful** settlement — without the constraints below a refund could anchor against a non-existent or failure-outcome record, or over-refund, feeding DACS-5 reputation records it cannot trust. There are three amendment types: **refund** / **partial-refund** (financial — carry `refundAmount`) and **correction** (non-financial — carries no `refundAmount`).
+**Amendment validity.** There are three amendment types: **refund** / **partial-refund** (financial — carry `refundAmount`) and **correction** (non-financial — carries no `refundAmount`). An amendment is valid only if it satisfies the constraints below; a refund must bind to a **real, successful** settlement.
+
+> **Note (non-normative).** Without these constraints a refund could anchor against a non-existent or failure-outcome record, or over-refund, feeding DACS-5 reputation records it cannot trust.
 
 - (AMEND-1) `amendsEvidenceRef` MUST resolve to an anchored SettlementEvidence whose `jobId` equals the amendment’s `jobId`.
 - (AMEND-2) a `refund` or `partial-refund` MUST reference an evidence record whose `outcome == "success"`. A settlement-atomicity failure (no funds moved) is unwound on the rail’s refund path (e.g. the HTLC timelock-refund per §9.5.4), NEVER via a refund amendment. A `correction` MUST NOT carry `refundAmount`.
-- (AMEND-3) the sum of `refundAmount` across all amendments referencing a single evidence record MUST NOT exceed that record’s `paymentAmount`, compared currency-matched per the PriceTerm. v0.1 REQUIRES refunds in the settled currency: a `refundAmount.currency` differing from the amended evidence's `paymentAmount.currency` makes the AMEND-3 bound non-evaluable and MUST be flagged per AMEND-4 (cross-currency refunds are out of scope for v0.1 — a roadmap candidate).
-- (AMEND-4) bundle assembly MUST reject — or, where a complete audit trail is preferred, flag — any amendment violating AMEND-1..AMEND-3 rather than silently including it; a flagged amendment MUST NOT be treated as a valid unwind by DACS-5 reputation derivation.
+- (AMEND-3) the sum of `refundAmount` across all amendments referencing a single evidence record MUST NOT exceed that record’s `paymentAmount`, compared currency-matched per the PriceTerm. v0.1 REQUIRES refunds in the settled currency. A `refundAmount.currency` differing from the amended evidence's `paymentAmount.currency` makes the AMEND-3 bound non-evaluable and MUST be flagged per AMEND-4; cross-currency refunds are out of scope for v0.1 — a roadmap candidate.
+- (AMEND-4) bundle assembly MUST reject — or, where a complete audit trail is preferred, flag — any amendment violating AMEND-1..AMEND-3 rather than silently including it. A flagged amendment MUST NOT be treated as a valid unwind by DACS-5 reputation derivation.
 
-*Not an amendment: ST-8 supersession.* The ST-8 cross-chain asymmetric resolution does NOT use an amendment at all — it is a same-phase supersession recorded via the success record's `supersedesEvidenceRef` (§10.3.1 ST-8); `supersedesEvidenceRef` is not an `amendsEvidenceRef` and is not subject to AMEND-1..4. A post-resolution refund MUST reference the `:resolved` success record — whose `outcome == "success"` — not the superseded interim `failure` record, which is AMEND-2-ineligible.
+*Not an amendment: ST-8 supersession.* The ST-8 cross-chain asymmetric resolution does NOT use an amendment at all. It is a same-phase supersession recorded via the success record's `supersedesEvidenceRef` (§10.3.1 ST-8); `supersedesEvidenceRef` is not an `amendsEvidenceRef` and is not subject to AMEND-1..4. A post-resolution refund MUST reference the `:resolved` success record — whose `outcome == "success"` — not the superseded interim `failure` record, which is AMEND-2-ineligible.
 
 ### 9.8 Cross-chain atomic settlement (SR-5)
 
@@ -752,9 +778,10 @@ Atomic settlement across chains requires SR-5: either substrate-native cross-cha
 - **Liquidity Tank** — the substrate consensus epoch (Demos seconds, 15-day emergency backstop);
 - **substrate-native** — atomically within the tx.
 
-The one branch **outside the refund arm** is the HTLC-9 reveal-succeeded / source-claim-pending state (§9.5.4): SR-5 implementations MUST surface it as asymmetric-settlement evidence (not a refund) and resolve it via the non-terminal `settle-asymmetric`/ST-8 — `htlc-claim` at source finality within `expiry_source` → `completed`; window expiry → terminal `failed-counterparty`. This is the bounded exception to the refund arm, not a hole in atomicity.
+The one branch **outside the refund arm** is the HTLC-9 reveal-succeeded / source-claim-pending state (§9.5.4). SR-5 implementations MUST surface it as asymmetric-settlement evidence, not a refund, and resolve it via the non-terminal `settle-asymmetric`/ST-8: `htlc-claim` at source finality within `expiry_source` → `completed`; window expiry → terminal `failed-counterparty`. This is the bounded exception to the refund arm, not a hole in atomicity.
 
-**Cross-chain messaging vs settlement.** Messaging protocols (Wormhole, LayerZero, Hyperlane, CCIP, Axelar, IBC) carry payloads between chains; SR-5 is *settlement*-atomicity (value on A and receipt on B happen together or not at all). A messaging protocol MAY be composed inside an SR-5 implementation but is not itself SR-5, so DACS-4 does not register messaging protocols as first-class rails — “message delivered” ≠ “value settled”. A substrate whose SR-5 depends on a specific messaging protocol MUST disclose this in the rail definition; the trust model then inherits both.
+**Cross-chain messaging vs settlement.** Messaging protocols (Wormhole, LayerZero, Hyperlane, CCIP, Axelar, IBC) carry payloads between chains; SR-5 is *settlement*-atomicity (value on A and receipt on B happen together or not at all). A messaging protocol MAY be composed inside an SR-5 implementation but is not itself SR-5 — “message delivered” ≠ “value settled” — so DACS-4 does not register messaging protocols as first-class rails. A substrate whose SR-5 depends on a specific messaging protocol MUST disclose this in the rail definition; the trust model then inherits both.
+
 **Choosing a rail.**
 
 | | HTLC | Liquidity Tank |
@@ -776,11 +803,13 @@ A listing’s pipeline declares the order of payment and delivery phases. Common
 
 **Conformance.**
 
-- (PIPE-1) A pipeline MUST contain at least one deliver-* phase. A pipeline MAY contain **zero** pay-* phases — the **intake-only / settled-out-of-band** pattern that §6.3.4(8) names (RFP intake, reverse auctions where the bid is the commitment, free services gated by reputation, sealed-bid procurements settled out-of-band); if a pipeline contains any pay-* phase, the acceptedRails rule of §6.3.4(8) applies. (This reconciles PIPE-1 with §6.3.4(8): a reader of either chapter reaches the same accept decision for a pay-less pipeline — earlier drafts required at-least-one-pay, contradicting §6.3.4(8).)
+- (PIPE-1) A pipeline MUST contain at least one deliver-* phase. A pipeline MAY contain **zero** pay-* phases — the **intake-only / settled-out-of-band** pattern that §6.3.4(8) names (RFP intake, reverse auctions where the bid is the commitment, free services gated by reputation, sealed-bid procurements settled out-of-band). If a pipeline contains any pay-* phase, the acceptedRails rule of §6.3.4(8) applies.
 - (PIPE-2) Phase ordering MUST be deterministic; the listing’s declared order is normative.
 - (PIPE-3) If a pay-* phase is followed by a deliver-* phase, the deliver-* phase MUST NOT execute until the pay-* phase returns ok: true.
 - (PIPE-4) If a deliver-* phase is followed by a pay-* phase, the pay-* phase MUST NOT execute until the deliver-* phase returns ok: true.
-- (PIPE-5) Pipelines MAY repeat a phase; each invocation produces independent SettlementEvidence. In v0.1 each repeated pay-* invocation settles the **same** agreement price (`PaymentPhaseInput.amount` = `agreement.terms.price`) — the payment contract carries no per-phase amount override, fee, or split, so a **fee-split** (distinct amounts to distinct payees, e.g. buyer + platform fee) is NOT representable in v0.1 and is a roadmap item (fee-split / multi-payee settlement model). Repetition is for genuinely identical settlements, not for splitting one price across payees.
+- (PIPE-5) Pipelines MAY repeat a phase; each invocation produces independent SettlementEvidence. In v0.1 each repeated pay-* invocation settles the **same** agreement price (`PaymentPhaseInput.amount` = `agreement.terms.price`). The payment contract carries no per-phase amount override, fee, or split, so a **fee-split** (distinct amounts to distinct payees, e.g. buyer + platform fee) is NOT representable in v0.1 and is a roadmap item (fee-split / multi-payee settlement model). Repetition is for genuinely identical settlements, not for splitting one price across payees.
+
+> **Note (non-normative).** PIPE-1 is deliberately aligned with §6.3.4(8): a reader of either chapter reaches the same accept decision for a pay-less pipeline.
 
 ### 9.10 Conformance summary
 
@@ -795,34 +824,55 @@ A listing’s pipeline declares the order of payment and delivery phases. Common
 ### 9.11 Rationale
 
 **Closed rail registry vs open.** Open registries make conformance untestable (a listing could name a rail no orchestrator implements). The closed v0.1 set covers the dominant production paths; new rails ship via the DACS-4 version process under the registry steward.
+
 **Uniform SettlementEvidence vs rail-specific evidence shapes.** Rail-specific shapes would force every downstream consumer (DACS-5, auditors, analytics) to handle N shapes. The uniform shape with a discriminated txRefs union keeps consumption simple while preserving per-rail detail.
+
 **Payment and delivery as separate phases vs combined.** Decoupling lets listings compose risk however the seller deems safe: pay-then-deliver for trusted sellers, deliver-then-pay where risk shifts to the seller. A combined phase would force every listing into one risk model. (Escrow-with-delivery-gate and streamed subscriptions are named in §9.9 as roadmap, not v0.1 patterns.)
-**HTLC and Liquidity Tank as parallel first-class rails.** HTLC is the only fully trust-minimised cross-chain primitive shipping today across heterogeneous chains (the reference runs on it); Liquidity Tanks are faster and cheaper but trust the substrate operator. Both have legitimate uses; v0.1 ships both rather than picking a winner.
+
+**HTLC and Liquidity Tank as parallel first-class rails.** HTLC is the only fully trust-minimised cross-chain primitive shipping today across heterogeneous chains (the reference runs on it). Liquidity Tanks are faster and cheaper but trust the substrate operator. Both have legitimate uses; v0.1 ships both rather than picking a winner.
+
 **AP2 and x402 as rails vs separate stages.** AP2 and x402 are payment protocols; they fit naturally as rails with their own phase handlers. Modelling them as separate stages would duplicate everything DACS-4 already does (evidence, conformance, error classification) for no gain.
+
 **Refunds as amendments vs separate phases.** Refunds happen post-settlement and may arrive long after the original phase has completed. Modelling them as out-of-band amendments anchored after the original evidence lets sessions close normally even when refunds straggle in. The amendment is included in the bundle if present at bundle time.
+
 **Native bridge / Liquidity Tank trust model disclosure.** Honest disclosure of "operated by a rotating Demos validator shard under 2/3 BFT multisig with 15-day emergency recovery" is the right default. Users picking this rail are choosing speed + cost over trust-minimisation, and the recipe makes that trade-off explicit. Substrates with different SR-5 realisations inherit their own trust models and MUST disclose them similarly.
 
 ### 9.12 Backwards compatibility
 
 **ERC-20.** pay-evm-erc20 uses the standard ERC-20 transfer interface; any compliant ERC-20 token works. The rail registry pins specific tokens (e.g. USDC) per chain to avoid scam-token substitution.
+
 **SPL.** pay-solana-spl uses the standard SPL TransferChecked instruction; any compliant SPL token works. The rail registry pins specific mints per cluster.
+
 **HTLC contracts.** Generic HTLC pattern; reference HTLC contracts in the DACS reference implementation are deployed on Base Sepolia and Solana devnet. Other deployments are compatible if they implement lock/claim/refund with the same hashlock-and-timelock semantics.
+
 **AP2.** Compatible with AP2 spec as donated to the FIDO Alliance in April 2026 and subsequent FIDO Alliance versions. Per-provider rail entries (ap2:visa-direct, ap2:mastercard-send, ap2:stripe-paymentintents) pin provider-specific parameters.
+
 **x402.** Compatible with x402 spec as published by Coinbase / Cloudflare / Anthropic. The pay-x402 rail handler is provider-agnostic; specific x402 servers may add parameters via the generic parameters field.
+
 **ERC-8183 escrow (future).** ERC-8183 introduces an EVM-native escrow primitive for job-style transactions. A future v0.2 rail (pay-evm-erc8183) will compose ERC-8183 escrow with DACS-4 evidence; v0.1 does not include it.
+
 **Substrate-native bridges (Demos Liquidity Tanks).** pay-cross-chain-liquidity-tank on Demos uses Liquidity Tanks per the SDK shape at kynesyslabs/sdks/src/bridge/nativeBridgeTypes.ts. Other substrates implementing SR-5 via native cross-chain transactions (e.g. Polkadot XCM) MAY add their own rails under the cross-chain-liquidity-tank rail type with substrate-specific parameters.
 
 ### 9.13 Security considerations
 
 **Re-entrancy on EVM rails.** *Threat:* a malicious ERC-20 hook re-enters the orchestrator during pay-evm-erc20 settlement. *Mitigation:* phase handlers MUST be re-entrancy-safe; the SettlementEvidence MUST be anchored only after the chain transaction is confirmed at finality.
+
 **MEV / front-running on payment txs.** *Threat:* a public-mempool payment can be front-run by MEV bots. *Mitigation:* rail.parameters MAY specify Flashbots-style private mempools or rate-limited public submission. Payment phases SHOULD support submitting via private mempools when available. For high-stakes settlements, cross-chain-liquidity-tank avoids public-mempool exposure entirely.
+
 **Cross-chain settlement-atomicity failure.** *Threat:* HTLC source-lock succeeds but dest-claim never happens; payer’s funds are locked. *Mitigation:* HTLC timelocks let payer reclaim after expiry. Phase handlers MUST track lock expiry and invoke refund automatically. settlement-atomicity error class flags this for DACS-5 reputation logic.
+
 **Liquidity Tank operator compromise.** *Threat:* the substrate validator shard operating Liquidity Tanks is compromised. *Mitigation:* the substrate’s security model (2/3 BFT multisig on Demos, 15-day emergency-recovery on Demos) is the floor. Listings handling high-stakes flows over Liquidity Tanks SHOULD evaluate the substrate’s validator-shard security; for the highest stakes, HTLC is recommended.
+
 **AP2 mandate replay.** *Threat:* an old AP2 mandate is replayed against the provider. *Mitigation:* AP2 mandates include a nonce and an expiry; the provider rejects replays. DACS-4 inherits AP2’s anti-replay properties.
-**x402 payment-receipt forgery.** *Threat:* a server claims payment it did not receive. *Mitigation:* x402 settles on-chain, so the primary audit is verifying the anchored `settlementTxHash` against the settlement chain — like the `evm` rail, not server- or facilitator-forgeable (§9.5.7); where no settlement tx is returned, verification falls back to the facilitator-signed receipt (processor-attested, not chain-verified). Buyer-side x402 wallets SHOULD keep a local record of submitted payments.
+
+**x402 payment-receipt forgery.** *Threat:* a server claims payment it did not receive. *Mitigation:* x402 settles on-chain, so the primary audit is verifying the anchored `settlementTxHash` against the settlement chain — like the `evm` rail, not server- or facilitator-forgeable (§9.5.7). Where no settlement tx is returned, verification falls back to the facilitator-signed receipt (processor-attested, not chain-verified). Buyer-side x402 wallets SHOULD keep a local record of submitted payments.
+
 **Delivery non-delivery.** *Threat:* seller signals payment received, never delivers. *Mitigation:* outside DACS-4’s remit; this is a DACS-3 / DACS-5 issue (the deliver-* phase MUST return ok: false on missing deliverable; DACS-5 records the failure; reputation impact accrues). Listings handling expensive non-recoverable deliveries SHOULD use escrow pipelines (pay-cross-chain-htlc) where the seller’s payment is contingent on demonstrable delivery.
+
 **Refund laundering.** *Threat:* a seller refunds to quietly unwind a failed delivery without recording failure. *Mitigation:* SettlementAmendments are anchored, signed, and included in DACS-5 bundles, so the trail shows both the original payment and the later refund; reputation derivation MUST treat refunded sessions appropriately. The inverse — a refund against a non-existent/failure-outcome record, or an over-refund — is guarded by AMEND-1..4 (§9.7.1).
-**Decimal-overflow in cross-decimal pay paths.** *Threat:* converting `amount.amount` to on-chain integer units overflows or mis-rounds. *Mitigation:* the §9.5.2/§9.5.3 procedures mandate string-decimal arithmetic with no float, and `PriceTerm.amount` is canonical per CD-1 (CORE §B.2); rail authors MUST specify `decimals` exactly and phase handlers MUST validate `amount.amount` precision against `rail.asset.decimals` (excess precision is an error).
+
+**Decimal-overflow in cross-decimal pay paths.** *Threat:* converting `amount.amount` to on-chain integer units overflows or mis-rounds. *Mitigation:* the §9.5.2/§9.5.3 procedures mandate string-decimal arithmetic with no float, and `PriceTerm.amount` is canonical per CD-1 (CORE §B.2). Rail authors MUST specify `decimals` exactly, and phase handlers MUST validate `amount.amount` precision against `rail.asset.decimals` (excess precision is an error).
+
 **Pinned-rail vs latest-rail at settle time.** *Threat:* the rail registry changes between agreement commit and settle execution. *Mitigation:* the rail is pinned at session start (per railRegistryVersion in SessionContext). Settle MUST use the pinned rail definition, even if the registry has since superseded it.
 
 ### 9.14 Phase parameters reference card
