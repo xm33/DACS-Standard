@@ -1,6 +1,6 @@
 # DACS-3: Negotiate — Negotiate
 
-*Normative module of DACS v0.1. Read the [Primer](../PRIMER.md) first; shared types, signatures, canonical form, the session model, and substrate requirements live in [CORE](CORE.md). Section numbers are retained from the unified specification; cross-references of the form §6–§10 point to sibling module documents per the §→document map in [CORE](CORE.md). The [conformance vectors](../conformance/) exercise this module's rules.*
+*Normative module of DACS v0.1. Read the [Primer](../PRIMER.md) first; shared types, signatures, canonical form, the session model, and substrate requirements live in [CORE](CORE.md). Section numbers are retained from the unified specification; per the §→document map in [CORE](CORE.md), cross-references of the form §6–§10 point to sibling module documents, and §A / §12–§14 to the companion references (Demos mapping, threat model, glossary, conformance plan). The [conformance vectors](../conformance/) exercise this module's rules.*
 
 ## Chapter 8 — DACS-3: Negotiate
 
