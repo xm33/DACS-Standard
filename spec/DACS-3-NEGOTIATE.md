@@ -35,15 +35,22 @@ A negotiation channel is a coordination surface with the following properties.
 #### 8.3.1 Required properties
 
 (CH-1) **Identity-keyed membership.** The channel’s member set is a list of ClaimReferences, **fixed for the channel's lifetime in v0.1**. Each member’s primary claim MUST appear in their verified DACS-1 bundle. The member set is established by the §8.3.2 binding-proof flow before negotiation begins and MUST NOT change mid-channel. Dynamic membership (mid-negotiation add/remove governed by an admission policy) is reserved for a future version: the `membership-change` message type and an `admissionPolicy` schema are deliberately **not** defined in v0.1, and `membership-change` is correspondingly absent from the v0.1 `ChannelMessage.type` set.
+
 (CH-2) **Confidentiality.** Non-members MUST NOT be able to read channel contents. The public chain MUST see only commitments (envelope commitments, agreement hash) and never raw offer/counter/reveal payloads.
+
 (CH-3) **Authenticity.** Every message in the channel MUST be signed by its author’s primary key (the key associated with the author’s primary claim). Verifiers MUST be able to validate signatures using the same keys used in DACS-2 verification.
+
 (CH-4) **Liveness.** The channel MUST deliver messages to all members within a bounded delay. Members MUST be able to detect channel-level failure (partition, censorship by the channel operator) and abort.
+
 (CH-5) **Termination.** The channel MUST produce a terminal state. Terminal states are: (a) a signed AgreementDocument; (b) an abort signed by any party; (c) timeout. The terminal state is referenced by commit-agreement (if agreement) or recorded as a failed Negotiate stage (otherwise).
+
 (CH-6) **Per-session channelId uniqueness.** The substrate MUST derive a per-session-unique `channelId`, and an orchestrator MUST reject a session that reuses a `channelId` from a prior session. Without this the cross-session offer-replay defence (§8.3.3 envelope `channelId` + monotonic `sequence`) is vacuous — a reused `channelId` would let a session-A offer verify in session B. The threat and replay analysis are detailed in §8.12.
 
 #### 8.3.2 SR-4 realisation
 
-On Demos, L2PS (Layer-2 Privacy Subnets) is the SR-4 implementation. Channel sessions are subnets; messages stay between subnet members; the public chain stores only commitment hashes and the final agreement hash (as Storage Programs). For v0.1, subnet membership MUST be bindable to the participants’ CCI primary claims so that channel-message signatures verify against the same key that holds value on-chain, and the commit-agreement anchor’s parties match the channel members. Until CCI-keyed membership ships, implementations MAY use a binding-proof step: each participant signs an "L2PS subnet X membership = CCI Y" attestation with their CCI primary key, anchored as a Storage Program before negotiation begins.
+On Demos, L2PS (Layer-2 Privacy Subnets) is the SR-4 implementation. Channel sessions are subnets; messages stay between subnet members; the public chain stores only commitment hashes and the final agreement hash (as Storage Programs).
+
+For v0.1, subnet membership MUST be bindable to the participants’ CCI primary claims, so that channel-message signatures verify against the same key that holds value on-chain and the commit-agreement anchor’s parties match the channel members. Until CCI-keyed membership ships, implementations MAY use a binding-proof step: each participant signs an "L2PS subnet X membership = CCI Y" attestation with their CCI primary key, anchored as a Storage Program before negotiation begins.
 Other substrates MAY implement SR-4 via TEE-based confidential channels, zk-based privacy circuits, or permissioned-overlay networks bound to public-chain identity, provided they satisfy CH-1 through CH-6. DACS-3 does not standardise the wire protocol or the cryptographic envelope — those are SR-4 implementation choices — but does standardise the messages’ semantic shape.
 
 #### 8.3.3 Message envelope (substrate-independent)
@@ -105,7 +112,14 @@ type NegotiateFixedPriceOutput = PhaseHandlerResult & {
 }
 ```
 
-**Procedure.** The orchestrator (or buyer agent, depending on actor) MUST: construct an AgreementDocument with derivedFromPattern: "fixed-price", copying terms directly from the listing’s pricing, acceptedRails (using the buyer’s selected rail), deliverable, and deadline (computed as now + listing.terms.deadlineSecAfterCommit); collect buyer signature; collect seller co-signature; anchor the agreement document via SR-2; return agreementHash and agreementRef.
+**Procedure.** The orchestrator (or buyer agent, depending on actor) MUST:
+
+1. construct an AgreementDocument with derivedFromPattern: "fixed-price", copying terms directly from the listing’s pricing, acceptedRails (using the buyer’s selected rail), deliverable, and deadline (computed as now + listing.terms.deadlineSecAfterCommit);
+2. collect buyer signature;
+3. collect seller co-signature;
+4. anchor the agreement document via SR-2;
+5. return agreementHash and agreementRef.
+
 **Seller-side auto-accept (optional)**
 A listing MAY declare terms.acceptanceModel: "auto-accept", in which case the seller pre-issues a **template acceptance commitment** alongside the listing rather than a per-session signature. The mechanism:
 
@@ -117,6 +131,7 @@ A listing MAY declare terms.acceptanceModel: "auto-accept", in which case the se
   *Instance signature (step 4).* This signature is **NOT pre-issued** — it MUST be produced live by the seller’s keyholder or by an authorised auto-signer the seller has explicitly delegated to. The pre-issued AutoAcceptCommitment authorises the auto-signer to produce instance signatures within its scope.
 
 Listings using auto-accept MUST publish the AutoAcceptCommitment alongside the listing, and the buyer’s orchestrator MUST verify the commitment before relying on auto-accept. A pre-issued per-instance signature (signing a placeholder agreement hash) MUST NOT be used; the per-instance signature binds to a specific agreement hash. Sellers operating auto-accept MUST hold the auto-signing key in a system that produces live instance signatures on demand (HSM, TEE, hot wallet with rate-limiting).
+
 **Substrate:** SR-2 only.
 
 #### 8.4.2 negotiate-rfq
@@ -508,6 +523,7 @@ If all channel members consent, the transcript MAY be encrypted to the member se
 ### 8.8 Pattern selection by listing
 
 A DACS-1 listing’s pipeline declares which negotiation pattern is used. Each PhaseStep of kind negotiate-* specifies the pattern and its parameters.
+
 **Validation.**
 
 - (PS-1) A pipeline MUST contain exactly one negotiate-* phase.
@@ -515,6 +531,7 @@ A DACS-1 listing’s pipeline declares which negotiation pattern is used. Each P
 - (PS-3) The listing’s pricing model MUST be compatible with the chosen pattern: negotiate-fixed-price MUST be fixed or negotiable (in which case fixed-price uses the band’s centre); negotiate-rfq MUST be negotiable; negotiate-sealed-envelope MUST be auction.
 
 **Fallback to fixed-price.** A listing offering negotiate-rfq MAY declare fixedPriceFallback: true in the pipeline step. When true, a buyer that does not wish to negotiate MAY signal acceptance of the listed centre-price via negotiate-fixed-price. The orchestrator selects which pattern runs based on buyer signal. The fallback path produces a normal AgreementDocument with derivedFromPattern: "fixed-price".
+
 **Multi-quote RFQ (deferred to v0.2).** The v0.1 negotiate-rfq phase is bilateral (one buyer, one seller). Real institutional RFQ is often one-to-many — a buyer queries N liquidity providers, collects quotes, picks one. v0.1 does not support multi-quote RFQ directly; the closest pattern is negotiate-sealed-envelope with selectionRule: first-acceptable or lowest-price. A first-class negotiate-multi-quote phase is anticipated for v0.2.
 
 ### 8.9 Conformance summary
@@ -532,36 +549,59 @@ A DACS-1 listing’s pipeline declares which negotiation pattern is used. Each P
 ### 8.10 Rationale
 
 **Three patterns vs more/fewer/open.** Three is the smallest set covering the demonstrated surface: fixed-price (micropayments, SaaS), RFQ (institutional bilateral), sealed-envelope (sealed-bid procurement). Open registries lose conformance testability; more patterns (english/dutch auction, multi-round delta-RFQ) are deferred to v2.
+
 **Closed pattern set vs open.** A closed set lets every conforming orchestrator handle every conforming listing; an open set lets listings declare unsupported patterns — fragmentation by design.
+
 **Single AgreementDocument shape across patterns.** Settle and Verify consume agreements regardless of how negotiated, so a uniform shape keeps them pattern-agnostic; pattern-specific data lives in `additionalTerms` / optional fields.
+
 **Transcript private by default vs anchored-encrypted.** Default-anchoring transcripts is expensive and adoption-hostile (operators won't anchor negotiation history, even encrypted). Default-private with opt-in anchoring matches institutional practice; regulated flows opt in.
+
 **commit-agreement as a separate phase.** A separate phase makes the on-chain commitment visible in the pipeline, lets the orchestrator validate signature/conformance before binding, and gives Settle/Verify a clear hook; implicit commitment hides the binding moment and complicates recovery.
+
 **SR-4 abstract, not a fixed realisation.** Substrates may realise it via private subnets (Demos), TEEs, permissioned channels, or zk-confidential channels; DACS-3 specifies the abstract capability and per-pattern requirements, not a winner.
+
 **Sealed-envelope: commit anchored, reveal in channel.** The on-chain commit hash prevents back-dating/repudiation; the in-channel reveal avoids leaking losing bids — matching government sealed-bid practice.
 
 ### 8.11 Backwards compatibility
 
 **Institutional RFQ workflows.** A negotiate-rfq run maps to existing bilateral RFQ as a Bloomberg-chat RFQ maps to a Symphony RFQ: same semantic shape, different transport (the SR-4 channel). Existing desks wrap their negotiation logic as a DACS-3 phase without changing it.
+
 **Sealed-bid government procurement.** negotiate-sealed-envelope covers FAR Part 14's commit-then-reveal with cryptographic commitment (vs physical envelopes); the selection-rule abstraction (lowest-price / first-acceptable / rule-ref) covers FAR's "lowest responsive responsible bidder" and "best value". EU/UK equivalents map similarly.
+
 **Off-chain negotiation systems.** An existing RFQ system / procurement portal / B2B negotiation tool MAY serve as the SR-4 channel provided it satisfies CH-1..CH-6; the public-chain binding and agreement shape are the only DACS-3 additions.
+
 **ERC-8183 escrow.** A DACS-3 agreement whose `terms.rail` is an EVM rail MAY reference an ERC-8183 escrow as the settlement vehicle; the DACS-4 rail definition carries the contract address.
+
 **Future patterns.** New patterns (auctions, multi-round delta-RFQ) are added via the DACS-3 version process — registering the phase-handler contract, parameters, and substrate requirements.
 
 ### 8.12 Security considerations
 
 **Channel-operator censorship.** *Threat:* the SR-4 channel operator drops messages, preventing a party from responding within the timeout. *Mitigation:* CH-4 mandates liveness detection. Members observing missed deliveries (no acknowledgement from a quorum) MUST treat the channel as failed. On Demos, Private Negotiation provides per-message acknowledgements; equivalent SR-4 implementations on other substrates SHOULD do the same.
+
 **Channel-operator forking.** *Threat:* the channel operator shows different views to different members, creating mutual misunderstanding. *Mitigation:* channel message envelopes carry monotonic sequence numbers and signatures; members SHOULD periodically exchange "current state" attestations and detect forks. SR-4 implementations are expected to provide a tamper-evident message log.
+
 **Replay of offers across sessions.** *Threat:* an attacker captures a signed offer from session A and replays it in session B. *Mitigation:* the channel message envelope includes channelId and sequence (per-channel monotonic). This defence holds only if channelId is unique per session: **(CH-6) channelId MUST be unique per session** — the substrate MUST derive a per-session-unique channelId, and an orchestrator MUST reject a session that reuses a channelId from a prior session. (Without CH-6 the replay defence is vacuous: a reused channelId would let a session-A offer verify in session B.) Given CH-6, an offer replayed into a different channel fails signature verification because the channelId differs; replayed in the same channel it duplicates a sequence number and is rejected.
+
 **Signature stripping or rebinding between channel and agreement.** *Threat:* an attacker takes a signature produced inside the channel and reuses it on a different agreement document. *Mitigation:* channel-message signatures are over the message envelope (including channelId); agreement-document signatures are over the agreement hash (which includes jobId, listingRef, and all terms). The two scopes are non-overlapping; a channel signature does not validate as an agreement signature.
+
 **Sealed-envelope front-running.** *Threat:* a bidder learns competitors’ bids before reveal. *Mitigation:* *before reveal*, bids stay encrypted in the channel and only the bid hash is public; *at reveal*, openable `{bid, salt}` records are anchored publicly (§8.4.3 step 4 — intentional, so relay-suppression resistance and SE-3 timestamping work). The channel’s confidentiality ensures non-members cannot read pre-reveal bids; the cryptographic commitment ensures the bidder cannot change their bid after observing competitors at reveal time (the only residual move — delaying one's own reveal to read earlier ones — yields nothing actionable, since the delayer's bid is already committed). Operators SHOULD use SR-4 implementations with member-exclusive encryption.
+
 **Sealed-envelope post-deadline submission.** *Threat:* a bidder submits a commit after commitDeadline, claiming clock skew. *Mitigation:* SE-2 mandates the commit’s public-chain anchor timestamp (objective, substrate-determined) be ≤ commitDeadline. Clock skew at the bidder is irrelevant; the chain decides the timestamp.
+
 **Agreement-listing mismatch.** *Threat:* a signed agreement contains terms outside the listing’s pricing band or with an unaccepted rail. *Mitigation:* validation rules; commit-agreement must reject. Both sides also SHOULD validate before signing.
+
 **Multi-party signing race.** *Threat:* one party signs an agreement; before the other co-signs, the first party publicly commits and locks the other in. *Mitigation:* commit-agreement requires all required signatures present. A unilaterally-signed agreement fails CA. A future minor version MAY add pending-co-signature semantics for asynchronous flows; v0.1 requires synchronous signature collection.
+
 **Public-chain timing analysis.** *Threat:* the pattern of commitment timestamps on the public chain reveals negotiation patterns. *Mitigation:* this is a fundamental property of any commit-on-chain protocol. Parties concerned with timing leak SHOULD use SR-4 channels with timing-padded delivery, anchor commitments at random intervals within a window, or settle through privacy-preserving rails. DACS-3 does not standardise timing obfuscation.
+
 **Identity substitution between Vet and agreement signature.** *Threat:* a party’s bundle is verified in DACS-2 but they sign the agreement with a different key. *Mitigation:* AgreementSignature.party references the primary claim from the bundle. The signature key MUST be the one bound to that claim. Mismatches cause commit-agreement to fail.
+
 **Channel-membership exfiltration.** *Threat:* the channel operator (or a compromised member) leaks the negotiation transcript publicly. *Mitigation:* DACS-3 cannot prevent this technically — once a member sees the transcript, they can leak it. Listings handling sensitive flows SHOULD restrict membership to known counterparties; the leak risk reduces to counterparty-trust risk, which DACS-2 verification helps quantify.
+
 **Late-revealing bidder denial-of-service.** *Threat:* in sealed-envelope, a bidder commits and then deliberately fails to reveal, hoping to disrupt the auction. *Mitigation:* SE-4 excludes non-revealing bidders from selection and marks them with a reputation event. Repeated failures damage their DACS-5 reputation. Listings MAY require a stake from bidders (escrowed at commit, returned on reveal) to make denial-of-service costly; v0.1 does not standardise stake.
 
 **Orchestrator / seller reveal manipulation.** *Threat:* the sealed-envelope channels are seller↔bidder and the orchestrator drives them, so the orchestrator (and, when the seller acts as orchestrator, the seller) is a member of every bidder's channel and could (a) learn each revealed bid as it arrives during the revealWindow and steer a favoured bidder, or (b) suppress an honest low bid by withholding its reveal anchor so SE-3 excludes it. The bidHash commitment prevents *changing* a bid but not these manipulations. *Mitigation (v0.1):* reveal records are anchored by the **bidder**, not the orchestrator (procedure step 4), so an excluded bidder holds on-chain proof of a timely in-window reveal and the orchestrator cannot silently drop it; SE-5 makes selection deterministic and rule-ref-bound (SE-6) so a favoured-bidder steer is detectable against the anchored bid set. *Residual:* v0.1's single-orchestrator model still trusts the orchestrator not to leak interim reveals to the seller before revealWindow close; listings sensitive to this SHOULD use a neutral (non-seller) orchestrator or a commit-to-all-then-reveal-to-all discipline. A simultaneous-reveal cryptographic scheme is a roadmap candidate.
+
 **RFQ session-initiation flooding.** *Threat:* a malicious counterparty repeatedly opens RFQ sessions and sends valueless `counter` turns up to `maxTurns`, forcing the victim's orchestrator to establish an SR-4 channel and process and sign turns at near-zero cost to the attacker. *Mitigation:* RFQ-1..RFQ-4 and `timeoutSec` bound a single session's turn count and per-turn wait, but v0.1 does not standardise a cap on the rate of session initiations per counterparty. Orchestrators SHOULD enforce a per-counterparty session-initiation rate limit (analogous to the per-session ERC-8004 write rate limit of §10.11) and MAY require a DACS-2 verification floor before admitting an RFQ initiator. This is a partial defence: the asymmetry between the attacker's initiation cost and the victim's per-session processing cost is not removed by v0.1.
+
 **Sealed-envelope commit-spam.** *Threat:* SE-2 requires every bidder commit to be anchored via SR-2, and SE-1/SE-2 impose no stake and no bidder-eligibility check; an attacker floods an open auction with junk commits, each forcing an SR-2 anchor, inflating the seller's anchoring cost and the §10.4.2 extended-pointer bundle size. *Mitigation:* the optional bidder-stake mechanism noted above (escrowed at commit) makes commit-spam costly, and listings MAY restrict the bidder set or require a DACS-2 verification floor at commit; sellers SHOULD rate-limit commit anchoring per counterparty. This is a partial defence because v0.1 does not standardise stake or a bidder-eligibility check; an open, stakeless auction remains exposed to anchoring-cost amplification.

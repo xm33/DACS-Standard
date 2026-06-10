@@ -20,11 +20,21 @@ Vet does three jobs and produces one output (the composite verification record) 
 
 ### 7.2 Motivation
 
-The Vet stage answers two questions before progressing past vet-credentials: *is the counterparty's bundle valid right now?* (claims assembled months ago may have lapsed registrations, updated sanctions lists, or expired certifications); *is it sufficient for this specific deal?* (the listing may require deal-specific claims the bundle was never pre-attested for).
+The Vet stage answers two questions before progressing past vet-credentials:
 
-A one-shot check at session start fails for three reasons: **freshness** — existing standards attest at issuance; Vet must re-check against current authority state and produce a current attestation superseding the stale one; **supplementary signals** — reputation, completion history, dispute rates, and prior ratings inform the decision without being formal credentials; **deal-specific claims** — some claims exist only for this transaction (insurance binding, project clearance) and aren't reused.
+- *Is the counterparty's bundle valid right now?* Claims assembled months ago may have lapsed registrations, updated sanctions lists, or expired certifications.
+- *Is it sufficient for this specific deal?* The listing may require deal-specific claims the bundle was never pre-attested for.
 
-Two further design failures DACS-2 avoids: treating each method as its own protocol (the uniform `VerifyResult` is the lingua franca — methods produce it, the stack consumes it), and forcing one method onto all credentials (public-registry credentials fit consensus-backed proxy/SR-3; private-data fit TLSNotary/zkTLS; cooperative-issuer fit W3C VC — the recipe registry routes each scheme, the stack stays method-agnostic).
+A one-shot check at session start fails for three reasons:
+
+- **Freshness** — existing standards attest at issuance; Vet must re-check against current authority state and produce a current attestation superseding the stale one.
+- **Supplementary signals** — reputation, completion history, dispute rates, and prior ratings inform the decision without being formal credentials.
+- **Deal-specific claims** — some claims exist only for this transaction (insurance binding, project clearance) and aren't reused.
+
+Two further design failures DACS-2 avoids:
+
+- Treating each method as its own protocol. The uniform `VerifyResult` is the lingua franca — methods produce it, the stack consumes it.
+- Forcing one method onto all credentials. Public-registry credentials fit consensus-backed proxy/SR-3; private-data fit TLSNotary/zkTLS; cooperative-issuer fit W3C VC. The recipe registry routes each scheme; the stack stays method-agnostic.
 
 ### 7.3 Verification methods (v0.1 closed registry)
 
@@ -116,10 +126,19 @@ type ConsensusProxyMethodInput = {
 ```
 
 **Procedure.** Renders the URL by substituting {identifier} and other recipe parameters into urlTemplate; submits the fetch specification to the substrate’s SR-3 primitive (on Demos: dahr.startProxy({url, method, options})); the substrate returns the response body inline plus chain-anchored commitment hashes (responseHash, responseHeadersHash) via a one-tx web2Request. Anchors the commitment record via SR-2; applies parser rules to the response body; if recipe.negativeMatch is true (OFAC pattern): decision = "pass" when the parser finds no match, "fail" when a match is found; otherwise pass when the parser matches expected success criteria.
+
 **Trust model in v0.1 — consensus-anchored hash commitment.** The substrate validator set collectively signs the on-chain transaction that asserts "we fetched URL X at time T and obtained a response with hash H." The full response body is **not** independently signed by the validator set in v0.1; the chain-level guarantee is "this hash came from this URL at this time," not "this body content is validator-attested." Verifiers consuming the body MUST verify the body’s hash matches the on-chain commitment.
-**Trust caveats v0.1 implementations MUST surface to consumers.** (a) A validator-set majority that colludes can sign a commitment to a forged response; the body the consumer reads will hash to the committed value, so consumers cannot detect this from the commitment alone. (b) A single validator fetching the response and the rest signing the resulting hash is operationally indistinguishable from a full-fanout fetch under current SR-3 specs; recipes used for high-stakes verification SHOULD set multi-method alternatives (see §7.12). (c) The TLS connection between substrate validators and the authority is the trust floor for response authenticity at fetch time; an attacker who can MITM the authority’s TLS endpoint can cause all validators to commit to forged content.
+
+**Trust caveats v0.1 implementations MUST surface to consumers.**
+
+- (a) A validator-set majority that colludes can sign a commitment to a forged response; the body the consumer reads will hash to the committed value, so consumers cannot detect this from the commitment alone.
+- (b) A single validator fetching the response and the rest signing the resulting hash is operationally indistinguishable from a full-fanout fetch under current SR-3 specs; recipes used for high-stakes verification SHOULD set multi-method alternatives (see §7.12).
+- (c) The TLS connection between substrate validators and the authority is the trust floor for response authenticity at fetch time; an attacker who can MITM the authority’s TLS endpoint can cause all validators to commit to forged content.
+
 **v0.2 strengthening (planned).** A future minor version is expected to specify a "validator-body-signed" mode in which each validator independently signs the response body bytes and the aggregate signature is anchored. When this mode ships, recipes for high-stakes schemes (lei, finra-crd, ofac-clear, sam-uei) SHOULD migrate to require it. v0.1 recipes that already declare alternatives are forward-compatible.
+
 **Substrate:** SR-3 (proxy attestation primitive); SR-2 (anchoring).
+
 **Note on the tlsn CCI context.** TLSNotary proofs are a native CCI context on Demos (cci-tlsn:<proof-hash>), validated by Demos’s GCR routines. When the proof is already registered as a cci-tlsn claim in the counterparty’s bundle, Vet treats it as a CCI-native verification (the tlsn GCR routine has already validated it) and does NOT re-run the external tlsnotary method. The external tlsnotary method applies only when an *unregistered* proof is presented at session time.
 
 #### 7.3.6 oauth-attested
@@ -382,8 +401,11 @@ This mirrors the rail-side `railVersion` pin (§9.3) and is the mechanism that p
 - **DACS-2 recipe releases** (the recipe registry) version per-scheme on whatever cadence the underlying authority demands. Recipe revisions ship under the steward’s signing key and do not block on DACS-2 standard releases.
 
 **Current steward (v0.1).** The DACS-2 recipe registry is currently maintained by **KyneSys Labs** as the v0.1 steward. This is a single-signer arrangement (phase PA-2 per the progressive-anchoring scheme below). Wider governance — working-group constitution, multi-signature schemes, sub-authority delegation by domain (sanctions lists, financial regulation, etc.) — is open work for v0.2+ and depends on the eventual constitution of a multi-party body. v0.1 implementations and consumers reason about the registry under single-steward semantics: one signing key, one anchoring authority, full transparency about both.
+
 **Emergency recipe updates.** When an authority endpoint becomes unavailable or returns materially-incompatible data, the steward MAY publish an emergency recipe revision. Emergency revisions MUST: be signed normally; include an emergency: true field in the governance block; cite the failure observation (URL of authority change announcement, observed response format diff). Emergency revisions take effect at next session start; in-flight sessions continue against pinned recipeVersion.
+
 **Recipe deprecation.** A recipe MAY be marked deprecated by publishing a new revision with deprecated: true and a deprecationReason. Verifiers MUST NOT initiate new sessions using deprecated recipes for required claims; in-flight sessions continue. A deprecated recipe with no replacement leaves the scheme un-verifiable; this is a v0.2 strengthening target for any scheme that hits this condition.
+
 **Progressive anchoring phases.** Recipe anchoring proceeds through three phases, recorded in the recipe's `governance.anchoring` field (§7.4.1):
 
 | Phase | `anchoring` value | What it means |
@@ -472,8 +494,22 @@ type AttestationRef = {
 
 Canonical form is RFC 8785 JCS of the VerifyResult with the signature field omitted. The VerifyResult hash is sha256(canonical_form), hex-encoded. The signature is computed over the domain-separated payload per §B.7:
 signed_bytes := "dacs-verifyresult:v1:" || verifyresult_hash
-**Validator-set claim references.** When AttestationRef.signer designates the producer of a consensus-backed-proxy or evm-rpc attestation, the ClaimReference MUST use the substrate-validator-set scheme: substrate-validator-set:<substrateId>:<epochOrSetId>. <substrateId> is a registered substrate identifier (v0.1 registry: "demos-mainnet", "demos-testnet"; future substrates added by the registry steward). <epochOrSetId> identifies the specific validator set that signed the attestation (Demos uses epoch numbers; substrates using rotating sets use whatever identifier the substrate exposes). Consumers MUST resolve the validator-set reference to the substrate’s published validator-set roster for that epoch and verify the attestation signature against the aggregate of those validators’ keys per the substrate’s consensus protocol. Substrates whose validator-set rosters are not publicly resolvable MUST NOT be used as the signer of a VerifyResult intended for cross-substrate consumption.
-**Public-anchor data minimisation (normative).** A VerifyResult is anchored at a publicly-derivable address (§7.3.1 CM-2) in cleartext, so its `data` field is world-readable. Therefore `data` in a publicly-anchored VerifyResult MUST carry **only predicate outcomes** — the booleans / derived facts the recipe's match needs (e.g. `{ overEighteen: true }`, `{ sanctioned: false }`, `{ kycTier: "enhanced" }`) — and MUST NOT carry raw extracted **private** personal or financial fields (date of birth, account balance, document/government-ID numbers) or any value a privacy-preserving method was used specifically to avoid disclosing. This is load-bearing for privacy-preserving methods: a `tlsnotary` or `zktls` recipe exists precisely to prove a fact without revealing the underlying value, and copying that value into a cleartext public anchor would defeat the method. A recipe whose `parserRules` would extract such sensitive raw fields MUST reduce them to predicate outcomes before they enter an unencrypted anchored `data`. Fields that are **already public at the authority** — e.g. a public registry's published company name / jurisdiction, such as GLEIF LEI data — are NOT subject to this minimisation, since anchoring already-public registry data leaks nothing. (Carrying the raw fields is only permissible under the encrypted-to-parties anchoring mode that is roadmap work — see §12.1.) The exposure of `scheme`, `identifier`, and `decision` themselves is accepted by design per §12.1.
+
+**Validator-set claim references.** When AttestationRef.signer designates the producer of a consensus-backed-proxy or evm-rpc attestation, the ClaimReference MUST use the substrate-validator-set scheme: substrate-validator-set:<substrateId>:<epochOrSetId>.
+
+- <substrateId> is a registered substrate identifier (v0.1 registry: "demos-mainnet", "demos-testnet"; future substrates added by the registry steward).
+- <epochOrSetId> identifies the specific validator set that signed the attestation. Demos uses epoch numbers; substrates using rotating sets use whatever identifier the substrate exposes.
+- Consumers MUST resolve the validator-set reference to the substrate’s published validator-set roster for that epoch and verify the attestation signature against the aggregate of those validators’ keys per the substrate’s consensus protocol.
+- Substrates whose validator-set rosters are not publicly resolvable MUST NOT be used as the signer of a VerifyResult intended for cross-substrate consumption.
+
+**Public-anchor data minimisation (normative).** A VerifyResult is anchored at a publicly-derivable address (§7.3.1 CM-2) in cleartext, so its `data` field is world-readable. The rules:
+
+- `data` in a publicly-anchored VerifyResult MUST carry **only predicate outcomes** — the booleans / derived facts the recipe's match needs (e.g. `{ overEighteen: true }`, `{ sanctioned: false }`, `{ kycTier: "enhanced" }`).
+- `data` MUST NOT carry raw extracted **private** personal or financial fields (date of birth, account balance, document/government-ID numbers) or any value a privacy-preserving method was used specifically to avoid disclosing.
+- A recipe whose `parserRules` would extract such sensitive raw fields MUST reduce them to predicate outcomes before they enter an unencrypted anchored `data`.
+- Fields that are **already public at the authority** — e.g. a public registry's published company name / jurisdiction, such as GLEIF LEI data — are NOT subject to this minimisation, since anchoring already-public registry data leaks nothing.
+
+> **Note (non-normative).** This is load-bearing for privacy-preserving methods: a `tlsnotary` or `zktls` recipe exists precisely to prove a fact without revealing the underlying value, and copying that value into a cleartext public anchor would defeat the method. Carrying the raw fields is only permissible under the encrypted-to-parties anchoring mode that is roadmap work (§12.1). The exposure of `scheme`, `identifier`, and `decision` themselves is accepted by design per §12.1.
 
 #### 7.5.1 Decision values and semantics
 
@@ -485,7 +521,9 @@ The four decision values are not interchangeable. Each has distinct semantics th
 - **error** — verification could not complete. Transport failure, SR-3 fetch timeout, malformed authority response that the parser cannot consume at all, parser exception, unexpected authority API change. The verifier never received a decision. error is the verifier’s failure to obtain an authority decision, not the authority’s decision to be ambiguous.
 
 **Retry semantics.** (a) error MUST be treated as transient by default; the verifier MAY retry per recipe.retryClass (§7.6.1 below). (b) indeterminate MUST NOT be retried unless the recipe explicitly marks the method as retry-on-indeterminate (rare; reserved for authorities whose "pending" responses become conclusive on re-fetch). The authority’s indeterminate answer is the answer; re-asking does not change it. (c) pass and fail are terminal; no retry.
+
 **Aggregation semantics.** A required claim with overall result error or indeterminate after retry budget exhaustion MUST cause vet-credentials to fail the phase. Consumers MUST NOT treat any of indeterminate, error, or fail as pass under any circumstances. Aggregation logic (§7.7.1) distinguishes the three non-pass outcomes in its failure reasons so downstream consumers (dispute, audit, debugging) can determine whether verification reached the authority at all.
+
 **Why distinguish indeterminate from error.** Both produce non-pass outcomes, but the diagnostic value differs significantly. error means "we should try again or change verification path." indeterminate means "the authority answered, and the answer is not yes or no — escalate to a different authority or accept the ambiguity." Collapsing them loses information that consumers need.
 
 #### 7.5.2 Attestation resolution algorithm
@@ -742,7 +780,13 @@ This affects fault attribution only; the overall decision is unchanged. By the p
 | counterparty | Counterparty fails to present a required claim, OR a required claim returns `decision=fail` (the authority conclusively rejected the counterparty's claim) | No (Vet fails; counterparty marked at-fault) |
 | substrate | SR-2 or SR-3 unavailable for sustained period | Pause session per DACS-5 |
 
-**VPC-4 is the authoritative cause→class mapping; this table enumerates causes consistent with it, not an independent rule.** A required claim returning `decision=fail` maps to **counterparty** (per VPC-4: `"fail" → counterparty`) — it is the counterparty's claim that the authority rejected, so it is never `permanent`. `permanent` is reserved for self-caused or structural failures (a malformed/unparseable bundle on the verifier/local side) and for `indeterminate`/`error` outcomes that exhaust their retry budget for non-counterparty reasons. **However, when the error/indeterminate is solely caused by a presentation the COUNTERPARTY supplied that the verifier could not parse in its declared format — an observable provenance (counterparty-supplied bytes that fail to parse) — the class is `counterparty`, not `permanent`** (the counterparty malformed its own claim, mirroring `decision=fail → counterparty`). This notably covers a `oneOf` group classified `error`/`indeterminate` only because the counterparty malformed one alternative while another conclusively failed (a credential-less counterparty must not escape the counterparty fault by malforming an alternative). This carve-out affects **fault attribution only** — the overall decision and the within-a-oneOf-group decision precedence (error > indeterminate > fail, §7.7.1) are unchanged. Because the class is fully determined by the decision/cause, an orchestrator has no discretion to steer a self-caused `fail` away from the counterparty fault bucket, nor to steer a counterparty-malformed `error` into the self/`permanent` bucket (§10.5.1).
+**VPC-4 is the authoritative cause→class mapping; this table enumerates causes consistent with it, not an independent rule.**
+
+- A required claim returning `decision=fail` maps to **counterparty** (per VPC-4: `"fail" → counterparty`) — it is the counterparty's claim that the authority rejected, so it is never `permanent`.
+- `permanent` is reserved for self-caused or structural failures (a malformed/unparseable bundle on the verifier/local side) and for `indeterminate`/`error` outcomes that exhaust their retry budget for non-counterparty reasons.
+- **However, when the error/indeterminate is solely caused by a presentation the COUNTERPARTY supplied that the verifier could not parse in its declared format — an observable provenance (counterparty-supplied bytes that fail to parse) — the class is `counterparty`, not `permanent`**: the counterparty malformed its own claim, mirroring `decision=fail → counterparty`. This notably covers a `oneOf` group classified `error`/`indeterminate` only because the counterparty malformed one alternative while another conclusively failed (a credential-less counterparty must not escape the counterparty fault by malforming an alternative).
+- This carve-out affects **fault attribution only** — the overall decision and the within-a-oneOf-group decision precedence (error > indeterminate > fail, §7.7.1) are unchanged.
+- Because the class is fully determined by the decision/cause, an orchestrator has no discretion to steer a self-caused `fail` away from the counterparty fault bucket, nor to steer a counterparty-malformed `error` into the self/`permanent` bucket (§10.5.1).
 
 Re-running vet-credentials with the same inputs MUST produce the same composite-record content modulo the volatile fields refreshed against current state — `generatedAt`, each VerifyResult's `fetchedAt`/`verifiedAt`, and supplementary signals' `observedAt`/`value`. The orchestrator MUST NOT double-anchor; the reuse/no-change test is over the **stable** content (the freshness/deal-specific VerifyResultRefs + decisions, excluding those volatile timestamp/value fields), so an unchanged authority state reuses the existing anchor.
 
@@ -761,32 +805,53 @@ Re-running vet-credentials with the same inputs MUST produce the same composite-
 ### 7.10 Rationale
 
 **Method-pluggable registry vs single method.** No single approach fits every credential (cooperative-issuer → W3C VC; private-data → zkTLS; public-registry → consensus-backed proxy). The registry routes by type; the stack consumes a uniform `VerifyResult`.
+
 **Closed v0.1 method set vs open.** An open registry makes conformance untestable (a verifier could declare an arbitrary method producing unvalidatable results). v0.1 ships eight methods covering the established attestation patterns; new ones come via the steward's acceptance process, as in DACS-1.
+
 **Recipe-per-scheme vs general-purpose protocol.** A general-purpose fetch endpoint would lose the structured parser rules, success-criterion semantics, and negative-match pattern recipes encode. Recipes are small, per-scheme, and capture each authority's messy response format.
+
 **Composite record vs per-claim records.** The stack references *one* Vet artifact, not N. The composite record composes, signs, and anchors once instead of forcing every consumer to walk a list.
+
 **SR-3 dependency for consensus-backed-proxy.** Substrate-agnostic alternatives (single proxy / MPC TLSNotary) exist as separate registry methods but cost more per verification. For high-volume public-registry verification — the bulk of institutional Vet — consensus-backed proxy at chain rate is the right tool; the dependency is explicit and opt-in per recipe.
+
 **Single-verifier signature on the composite record.** Each side runs Vet on the other and produces its own record; v0.1 carries one signature per record. Mutual-Vet multi-party composition is deferred.
+
 **Reputation as supplementary signal, not a hard gate.** Reputation has no authoritative source; as a hard gate it would lock new sellers out of the market. It is surfaced to the verifier (and optional listing gating) but does not by default block engagement.
 
 ### 7.11 Backwards compatibility
 
 **W3C Verifiable Credentials.** A recipe MAY declare `verifiable-credential` as its method; the verifier accepts a W3C VP per VC data model 2.0. Recipe authors SHOULD set `issuerAllowList` where only specific issuers are trusted (e.g. a `kyc-tier` recipe allow-listing specific KYC providers).
+
 **TLSNotary.** A recipe MAY declare `tlsnotary`; the notary signature anchors as part of `AttestationRef`. Compatible with the PSE 2024 rebuild and later.
+
 **zkTLS / Reclaim / Pluto.** A recipe MAY declare `zktls` and select a provider whose circuit / verification-program id determines the check. Compatible with Reclaim's production verifier contracts and equivalent providers shipping a circuit description.
+
 **ERC-8004.** `erc8004`-scheme recipes use `evm-rpc` to read token ownership via proxy-attested call. DACS-2 results MAY additionally be published to ERC-8004 reputation/validation registries via DACS-5; DACS-2 itself does not write there.
+
 **ACME / Let's Encrypt.** The `domain-tls-control` method follows ACME's challenge/response (RFC 8555); implementations MAY reuse existing ACME libraries.
 
 ### 7.12 Security considerations
 
 **Method substitution.** *Threat:* a verifier uses a weaker method than the recipe declares. *Mitigation:* the VerifyResult.method field MUST be the method actually executed; consumers compare to the recipe’s defaultMethod and alternatives and reject results that used an unaccepted method. Recipes SHOULD list only equivalent alternatives.
+
 **Recipe poisoning.** *Threat:* a compromised recipe registry returns incorrect parsing rules, causing every verification using that recipe to mis-classify outcomes. *Mitigation:* recipes are signed by the registry steward (currently KyneSys Labs, per §7.4.4); consumers MUST verify the signature. Recipe recipeVersion is monotonic and pinned per session; an attacker compromising the registry tomorrow does not retroactively change recipes used in already-pinned sessions. Steward-key compromise is the principal residual risk under the current PA-2 single-signer phase; multi-signature governance (PA-3) is the v0.2+ mitigation pathway.
+
 **Replay of VerifyResult across sessions.** *Threat:* a verifier reuses a stale VerifyResult from a different session or a different counterparty. *Mitigation:* the VerifyResult.identifier MUST match the claim under verification canonically; consumers verify the match. The composite record’s bundleHash and evaluatedParty bind the verification to a specific bundle. Cross-session reuse within validUntil is explicitly permitted and is safe because the result still verifies against the same identifier.
+
 **TOCTOU: authority state changes between fetch and use.** *Threat:* a counterparty’s authority status changes between Vet and the actual transaction execution. *Mitigation:* listings handling time-sensitive flows SHOULD set ClaimRequirement.maxAge aggressively (e.g., 60 seconds for OFAC clearance on a real-money trade). Sessions with long latency between Vet and Settle SHOULD re-run Vet at Settle time for the most stake-sensitive claims.
+
 **Substrate validator capture (SR-3).** *Threat:* a majority-corrupt substrate validator set forges responses, causing consensus-backed-proxy and evm-rpc methods to attest to false facts. *Mitigation:* the substrate’s consensus model is the trust floor; DACS-2 inherits whatever security properties the substrate provides. For credentials where this risk is unacceptable, recipes SHOULD declare **alternative independent methods** (the recipe `alternatives` mechanism, §7.4) so a high-stakes claim can additionally be verified by an independent method (e.g. tlsnotary or zktls) rather than relying on consensus-backed-proxy alone. Note the scope of what v0.1 composes: **cross-claim AND** — a listing requiring several distinct verified claims, all of which MUST pass — is already enforced (§6.3.3 `BundleRequirement.required`, "all MUST be satisfied"), and is how a real vet stacks GLEIF + OFAC + reputation. What v0.1 does **not** define is a single-claim multi-method-**AND** combinator (verifying the *same* claim by two methods that MUST both pass): §7.7.1 aggregation composes multiple VerifyResults for one claim but has no `requireAll` semantics, and no such flag is defined on the Recipe. Single-claim multi-method-AND is a roadmap item; v0.1 high-stakes recipes use alternatives (additional independent methods) plus cross-claim required-set AND.
+
 **W3C VC issuer compromise.** *Threat:* the signing key of a VC issuer is compromised, causing all VCs signed by that issuer to be untrustworthy. *Mitigation:* recipes SHOULD set issuerAllowList and check issuer revocation registries (where available, e.g., W3C VC Status List 2021). Issuers SHOULD rotate keys regularly. Consumers of historical VerifyResults SHOULD check whether the issuer was known-compromised at the time of verification.
+
 **TLSNotary notary collusion.** *Threat:* the notary colludes with the prover to attest to false TLS sessions. *Mitigation:* TLSNotary’s MPC ensures the notary cannot see plaintext but does require honesty about the commitment. Recipes using tlsnotary SHOULD specify a known-good notary public key in the recipe; multi-notary patterns are a future extension.
+
 **zkTLS proxy compromise.** *Threat:* the zkTLS provider’s proxy attests to false TLS responses. *Mitigation:* recipes select specific providers and program IDs. Compromise of a provider’s proxy invalidates all results from that provider; consumers SHOULD treat results from a known-compromised provider as invalid retroactively.
+
 **Supplementary signal poisoning.** *Threat:* false reputation data is injected (e.g. a Sybil network creating fake successful completions). *Mitigation:* DACS-5 specifies the reputation derivation; supplementary signals from DACS-5 inherit DACS-5’s anti-Sybil properties. Supplementary signals from external sources MUST carry an AttestationRef; consumers MAY decline to weigh signals from sources they do not trust.
+
 **Identifier canonicalisation gaps.** *Threat:* the same logical identifier in two different forms produces two different VerifyResult lookups or two different reputation keys, allowing an attacker to substitute or to split/launder reputation. *Mitigation:* the canonical-form rules CF-1 (NFC, §B.2), CF-2 (ClaimReference canonical byte form), and CF-3 (canonical identity = canonical scheme + identifier, parameters excluded), plus any per-scheme identifier rule, are normative. Verifiers MUST canonicalise per CF-1/CF-2 before issuing a VerifyResult, and consumers MUST compare per the CF-3 identity before lookup, reputation keying, or the §7.3.2 replay check.
+
 **Composite record forgery.** *Threat:* an attacker constructs a composite record with overallDecision = "pass" and false VerifyResultRefs. *Mitigation:* the composite record is signed by the verifier; consumers verify the signature. The bundleHash and requirementHash fields bind the record to specific inputs; consumers verify these against the inputs they actually used. Each VerifyResultRef MUST be dereferenced and content-hash-validated before the composite record is accepted.
+
 **Indeterminate-decision exploitation.** *Threat:* an attacker arranges for a required claim’s verification to fail in a way that returns indeterminate rather than fail, hoping consumers treat the result as pass. *Mitigation:* indeterminate is not pass. The aggregation algorithm treats indeterminate in a required position as overall indeterminate, which MUST fail the phase.
