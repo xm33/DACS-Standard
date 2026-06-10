@@ -71,7 +71,7 @@ type ChannelMessage = {
 }
 ```
 
-The envelope’s canonical form is the RFC 8785 JCS serialisation with the signature field omitted. The envelope hash is sha256(canonical_form), hex-encoded. The signature is computed over the domain-separated payload per §B.7:
+The envelope follows the §B.2 canonical-form template, omitting the `signature` field; the signature is computed over:
 signed_bytes := "dacs-channelmsg:v1:" || envelope_hash
 Implementations MAY add transport-level fields (routing, framing) outside the signed envelope; signed envelope contents MUST NOT change between sender and receiver.
 
@@ -412,7 +412,7 @@ type AgreementSignature = {
 
 #### 8.5.1 Canonical serialisation and signature
 
-The agreement’s canonical form is the RFC 8785 JCS serialisation with the `signatures` field omitted. The agreement hash is sha256(canonical_form), hex-encoded, and each `AgreementSignature.value` is computed over the domain-separated payload per §B.7:
+The agreement follows the §B.2 canonical-form template, omitting the `signatures` field; each `AgreementSignature.value` is computed over:
 signed_bytes := "dacs-agreement:v1:" || agreement_hash
 
 **Decimal amounts (CD-1).** Every `PriceTerm.amount` is in minimal-digit canonical decimal form per **rule CD-1 (CORE §B.2)** — producers canonicalise before the agreement hash, verifiers before the §8.5.2 price-band and price-equality comparisons.

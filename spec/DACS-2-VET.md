@@ -492,7 +492,7 @@ type AttestationRef = {
 }
 ```
 
-Canonical form is RFC 8785 JCS of the VerifyResult with the signature field omitted. The VerifyResult hash is sha256(canonical_form), hex-encoded. The signature is computed over the domain-separated payload per §B.7:
+The VerifyResult follows the §B.2 canonical-form template, omitting the `signature` field; the signature is computed over:
 signed_bytes := "dacs-verifyresult:v1:" || verifyresult_hash
 
 **Validator-set claim references.** When AttestationRef.signer designates the producer of a consensus-backed-proxy or evm-rpc attestation, the ClaimReference MUST use the substrate-validator-set scheme: substrate-validator-set:<substrateId>:<epochOrSetId>.

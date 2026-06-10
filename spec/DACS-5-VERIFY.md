@@ -219,7 +219,7 @@ type BundleSignature = {
 
 #### 10.4.1 Canonical serialisation, hash, and domain-separated signature
 
-Canonical form is RFC 8785 JCS of the bundle with the `signatures` **and `anchoredByRole`** fields omitted. Bundle hash is sha256(canonical_form), hex-encoded. Each BundleSignature.value MUST be computed over a domain-separated payload:
+Per the §B.2 canonical-form template, omitting the `signatures` **and `anchoredByRole`** fields. The bundle's `bundleHash.value` field carries that artifact hash — sha256(canonical_form), hex-encoded (distinct from `BundleParty.bundleHash`, which hashes a party's IdentityBundle). Each BundleSignature.value MUST be computed over a domain-separated payload:
 
 signed_bytes = "dacs-bundle:v1:" || bundleHash.value
 

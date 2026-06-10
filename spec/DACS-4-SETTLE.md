@@ -734,7 +734,7 @@ Every anchored record that carries a `signature: ComponentSignature` field MUST 
 - `signer` MUST be a ClaimReference whose role is fixed by the artifact's inline comment;
 - `value` MUST be the signature over that artifact's domain-separated payload as defined in its section.
 
-Canonical form is RFC 8785 JCS of the SettlementEvidence with the signature field omitted. `supersedesEvidenceRef`, when present, is part of the hashed canonical form (only `signature` is omitted), so an ST-8 `:resolved` record's hash binds the interim record it supersedes. Evidence hash is sha256(canonical_form), hex-encoded. The signature is computed over the domain-separated payload per §B.7:
+Per the §B.2 canonical-form template, omitting the `signature` field. `supersedesEvidenceRef`, when present, is part of the hashed canonical form (only `signature` is omitted), so an ST-8 `:resolved` record's hash binds the interim record it supersedes. The signature is computed over:
 signed_bytes := "dacs-evidence:v1:" || evidence_hash
 
 #### 9.7.1 Refunds and partial refunds

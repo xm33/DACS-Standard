@@ -183,7 +183,7 @@ SIWD is the preferred presentation. The siwd shape matches the return of provide
 - Bundles presented without session-nonce binding are usable only outside session contexts (e.g., listing publication where the bundle is the seller’s own self-binding to the listing).
 
 **Canonical serialisation**
-A bundle's canonical form is the RFC 8785 JCS serialisation of the bundle with the `presentation` field omitted. The bundle hash is `sha256(canonical_form)`, hex-encoded. The domain-separated `signed_bytes` (above) is what the presentation signature actually signs. Verifiers MUST recompute both the canonical form and the domain-separated payload when validating.
+The bundle follows the §B.2 canonical-form template, omitting the `presentation` field. The domain-separated `signed_bytes` (above) is what the presentation signature actually signs. Verifiers MUST recompute both the canonical form and the domain-separated payload when validating.
 
 **SIWD bundle-binding check.** For the `siwd` kind specifically:
 
@@ -478,7 +478,7 @@ Per-kind parameter shapes are normative in the owning chapter:
 | rate | optional {required?: boolean} | 10 |
 
 **Canonical serialisation and signature**
-A listing’s canonical form is the RFC 8785 JCS serialisation with the signature field omitted. The listing hash is sha256(canonical_form), hex-encoded. The signature.value is computed over the domain-separated payload per §B.7:
+The listing follows the §B.2 canonical-form template, omitting the `signature` field. The signature.value is computed over:
 signed_bytes := "dacs-listing:v1:" || listing_hash
 Verifiers MUST:
 
