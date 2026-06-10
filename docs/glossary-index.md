@@ -1,10 +1,10 @@
 # Glossary index
 
-This non-normative index maps commonly referenced DACS terms to their canonical specification sections. The normative glossary remains [Chapter 13](../spec/CORE.md#chapter-13-glossary).
+This non-normative index maps commonly referenced DACS terms to their canonical specification sections. The full glossary is [Chapter 13](../spec/GLOSSARY.md) (informative; per-chapter definitions are normative).
 
 | Term | Primary spec section | Notes |
 |------|----------------------|-------|
-| Anchor / Anchored | [§5 / SR-2](../spec/CORE.md#5-substrate-capabilities), [§12.5](../spec/CORE.md#125-composite-trust-property) | Stored with content integrity via substrate anchoring. |
+| Anchor / Anchored | [§5 / SR-2](../spec/CORE.md#5-substrate-capabilities), [§12.5](../spec/THREAT-MODEL.md#125-composite-trust-property) | Stored with content integrity via substrate anchoring. |
 | AttestationBundle | [§10.4](../spec/DACS-5-VERIFY.md#104-attestation-bundle) | End-of-session DACS-5 audit artifact. |
 | AttestationRef | [§B.5](../spec/CORE.md#b5-shared-phase-handler-types) | Reference to anchored evidence plus content hash. |
 | BundleParty | [§10.4](../spec/DACS-5-VERIFY.md#104-attestation-bundle) | Party entry inside an AttestationBundle. |

@@ -113,61 +113,7 @@ A substrate shipping all five can host a full DACS implementation. A substrate t
 
 ## A. Demos production mapping
 
-A mapping of which substrate primitives are live today, what extensions are needed for v0.1, and which dependencies are third-party. The mapping applies to every per-stage standard — DACS-1 through DACS-5 — in this paper.
-
-**Legend.** 🟢 in production today; 🟡 Demos team to add for v0.1; 🔵 third-party (composed, not built by Demos). This legend describes the substrate-primitive status — what the chain ships. Per-recipe and per-rail operational status uses the normative availability field defined in §7.4.5 (recipes) and §9.4.4 (rails). The legend here is informative about substrate features; availability there is normative about specific attestation paths and settlement rails. Earlier drafts conflated the two surfaces by extending this legend to recipes and rails; that conflation has been corrected in v0.1.
-
-### A.1 SR-1 — Cross-Context Identities (CCI)
-
-- 🟢 8 native contexts in production: xm, web2, pqc, ud, nomis, humanpassport, ethos, tlsn. Stored in GCRMain.identities. SDK methods getXmIdentities, getWeb2Identities, addXmIdentity, addTwitterIdentity, etc. SIWD (wallet_signIn, EIP-4361-style) for presentation.
-- 🟡 6 new CCI contexts for regulatory identity: lei, finra-crd, sam-uei, fedramp, naics, cmmc. Each needs a GCR routine following the pattern of the existing 8 reference implementations.
-- 🔵 ERC-8004 token references; W3C DIDs (carried via claim references; verified through DACS-2).
-
-**Stor-backed credentials.** The stor-cred:<type>:<id> scheme convention is the extensibility surface for future credentials not yet promoted to native CCI contexts. **OFAC-clear is not a CCI context** — it is a per-session freshness check that lives only in DACS-2’s CompositeVerificationRecord (it is a check, not a stable identity claim).
-
-### A.2 SR-2 — Storage Programs
-
-- 🟢 StorageProgramData per SDK at kynesyslabs/sdks/src/storage/StorageProgram.ts. Content-addressed at stor-{sha256(…)}. 128 KB cap. JSONB-backed in GCR_Main.data. ACL modes (private/public/restricted). Provenance via createdByTx, lastModifiedByTx, interactionTxs.
-- 🟡 Native multi-party Storage Program signature helper so buyer + seller co-signature of a closed AttestationBundle is a single transaction — current SDK supports owner-signed writes only.
-
-**Logical vs native addresses (applies universally).** Throughout this document, addresses of the form dacs1:…, dacs2:…, dacs3:…, dacs4:…, dacs5:… are *logical* addresses: substrate-independent, human-readable, stable identifiers the protocol reasons about. Variable segments embedded in a logical address (e.g. the seller's primary claim, which itself contains colons) are delimiter-encoded per rule CF-4 (§B.1) so the logical string is unambiguously parseable back into its components on any substrate. Each substrate maps the logical address to its native addressing in one of two ways:
-
-- **Pure mapping.** Where a substrate's native address is a pure function of the logical address, the mapping MUST be deterministic, one-to-one, and reversible, and consumers compute the native address directly from the logical pattern before reading.
-- **Write-input mapping.** Where a substrate folds write-time inputs (deployer address, transaction nonce, salt) into its native address — as Demos's StorageProgram derivation does (§6.3.4) — the native address is **not** recomputable from the logical address alone. The implementation MUST then publish the logical→native binding: as descriptive metadata on the anchored record AND via the discovery surfaces (§6.3.5 well-known index, §6.3.6 catalog). Consumers resolve the native address through that published binding before reading.
-
-In both cases implementations MUST anchor at the native address, the anchor transaction is the canonical pointer, and consumers MUST verify the content hash after dereferencing.
-
-### A.3 SR-3 — DAHR (Data Agnostic HTTPS Relay)
-
-- 🟢 Live via demos.web2.createDahr() → dahr.startProxy(…). Returns IWeb2Result with responseHash, responseHeadersHash, txHash. One on-chain web2Request tx per call. GCR routines per CCI context handle native-claim validation (including tlsn).
-- 🟡 DAHR signing-model clarification — current docs show **hash commitments only**, with no validator signature over the response body. v0.1 treats this as a **consensus-anchored hash commitment** model. If Kynesys upgrades DAHR to validator-sign the response body itself, DACS-2 v0.2 may strengthen the claim.
-- 🟡 CompositeVerificationRecord Storage Program schema.
-- 🟡 oauth-attested method depends on a Demos-side OAuth attester. If not built, the method is 🔵 third-party.
-- 🔵 W3C Verifiable Credentials, TLSNotary (external proof library — distinct from the 🟢 cci-tlsn:* native context), zkTLS (Reclaim, Pluto), ACME challenges for domain-tls-control.
-
-### A.4 SR-4 — L2PS (Layer-2 Privacy Subnets)
-
-- 🟢 new l2ps.L2PS() / new l2ps.L2PS(rsaPrivateKey). DemosWork orchestration with WorkStep (id, context, content, output, depends_on, critical), BaseOperation, ConditionalOperation (SDK module @kynesyslabs/demosdk/demoswork). Storage Programs for agreement-hash anchoring and sealed-envelope commitments.
-- 🟡 CCI-keyed L2PS membership — bind subnet membership to CCI primary claim so channel signatures map to the same identity that holds value on-chain. Current API is RSA-key-based.
-- 🟡 L2PS channel message envelope API — sequence numbering, signature export, transcript export.
-- 🟡 Encrypted transcript anchoring helper (for terms.transcriptDisclosurePolicy: "encrypted-anchored-required").
-- 🔵 ERC-8183 escrow primitive (Ethereum, draft); institutional RFQ desks’ off-chain systems composed as L2PS-equivalent transport.
-
-**DACS-3 phase types are realised as DemosWork WorkSteps.** Each negotiation pattern compiles to a sequence of WorkSteps with context: "xm" | "web2" | "native" and DACS-defined content shapes.
-
-### A.5 SR-5 — Native Bridges / Liquidity Tanks
-
-- 🟢 LiquidityTank.sol (audited; 600+ lines; rotating 2/3 multisig + 15-day emergency recovery) deployed on **ETH Sepolia** (0x7AE3A8B899BE0D9E9de51b81a9912C0CEE128d88) and **Polygon Amoy** (0x57cA16EeE7fbeC69BFD46E4806B5d91e173dd600).
-- 🟢 SDK type BridgeOperation at kynesyslabs/sdks/src/bridge/nativeBridgeTypes.ts. RPC handler at kynesyslabs/node/src/libs/network/manageNativeBridge.ts. Tank addresses config at kynesyslabs/node/config/tankAddresses.json. **bridge_id** (16-char hash) is the canonical end-to-end tracking handle.
-- 🟢 Trust model: **operated by a rotating Demos validator shard under 2/3 BFT multisig with 15-day deployer emergency recovery.** Not "no operator" — the operator is the substrate itself.
-- 🟢 MVP scope: USDC only; EVM-source; unidirectional. Gasless bridge operations (contract reimburses user gas from subsidy pool). BridgeOperation.status lifecycle: "empty" → "pending" → "completed" | "failed". XM SDK single-chain transfers (preparePay, prepareTransfer, prepareTransfers) for non-bridge rails. Storage Programs for deliver-storage-program and entitlement records.
-- 🟡 Phase 2: Solana tank programs (treasury Phases 3.3–3.4, SolanaAddressManagement class, vault management).
-- 🟡 Phase 3: Bidirectional + cross-chain shard rotation.
-- 🟡 Phase 4: Production polish + executeBridgeOperations consensus logic + cross-chain bridge message verification + emergency recovery mechanisms. Additional EVM tank deployments (currently 4 placeholder entries in tankAddresses.json). Mainnet deployments. Non-USDC stablecoin support. Native EntitlementRecord registry (optional; Stor-backed is fine for v0.1).
-- 🔵 AP2 (Google → FIDO Alliance, April 2026) — DACS-4 carries as a rail envelope. x402 (Coinbase + Cloudflare + Anthropic) — DACS-4 carries as a rail envelope. Rubic Bridge (third-party DEX aggregator, wrapped by SDK at @kynesyslabs/demosdk/bridge) — alternative cross-chain rail with explicit third-party trust disclosure.
-- 🔵 **HTLC contracts (generic atomic-swap pattern)** — pay-cross-chain-htlc is a first-class supported rail in DACS-4 v0.1. **The reference implementation in agent-commerce-demo uses HTLCs today for the fx-rfq cross-chain settlement** (929 LOC: real Solana Anchor program + Base Sepolia EVM HTLC contract; lock/reveal/refund implemented end-to-end). This predates Native Bridges Phase 1 deployment. The reference implementation will migrate to pay-cross-chain-liquidity-tank as Phase 1 stabilises; until then both rails are documented honestly. ERC-20, SPL (standard token interfaces). ERC-8183 escrow (proposed; future rail).
-
-**v0.1 cross-chain settlement scope.** pay-cross-chain-liquidity-tank is supported **only** for the rails currently live in tankAddresses.json (ETH Sepolia, Polygon Amoy; USDC; unidirectional EVM source). All other tank rails in the registry are 🟡 to-add and will unlock as Native Bridges Phase 2–4 ship. pay-cross-chain-htlc is the path the reference implementation runs today; v0.1 keeps both first-class.
+Moved to **[DEMOS-MAPPING.md](DEMOS-MAPPING.md)** (section numbering retained). Which Demos substrate primitives are live today, what the Demos team adds for v0.1, and which dependencies are third-party — for each substrate capability SR-1..SR-5.
 
 ## B. Global terminology
 
@@ -378,20 +324,24 @@ DACS composes with the following open standards. Each per-stage chapter cites th
 
 ## Document map
 
-DACS v0.1 is published as a Core document plus one module per stage. Chapter numbers are retained across the split.
+DACS v0.1 is published as a Core document, one module per stage, and four companion references. Chapter and section numbers are retained across the split.
 
 | Document | Contains | Chapters |
 | --- | --- | --- |
 | [PRIMER](../PRIMER.md) | non-normative overview + worked example | — |
-| **CORE** (this doc) | framing (§1–5), Demos mapping (§A), shared terminology & types & signatures (§B), composed standards (§C), governance (§11), threat model (§12), glossary (§13), conformance frame (§14) | 1–5, 11–14 |
+| **CORE** (this doc) | framing (§1–5), shared terminology & types & signatures (§B), composed standards (§C), governance (§11) | 1–5, 11 |
 | [DACS-1-IDENTIFY](DACS-1-IDENTIFY.md) | identity, listings, discovery | 6 |
 | [DACS-2-VET](DACS-2-VET.md) | verification methods, recipes, vet phase | 7 |
 | [DACS-3-NEGOTIATE](DACS-3-NEGOTIATE.md) | channels, negotiation patterns, agreement commit | 8 |
 | [DACS-4-SETTLE](DACS-4-SETTLE.md) | rails, payment & delivery phases, settlement evidence | 9 |
 | [DACS-5-VERIFY](DACS-5-VERIFY.md) | session record, attestation bundle, reputation | 10 |
+| [DEMOS-MAPPING](DEMOS-MAPPING.md) | Demos production mapping (companion reference) | §A |
+| [THREAT-MODEL](THREAT-MODEL.md) | unified threat model (companion reference) | 12 |
+| [GLOSSARY](GLOSSARY.md) | glossary (companion reference, informative) | 13 |
+| [CONFORMANCE-PLAN](CONFORMANCE-PLAN.md) | conformance test plan (companion reference) | 14 |
 | [PROFILE](PROFILE.md) | the v0.1 version set | — |
 
-A cross-reference to §6.x lives in DACS-1, §7.x in DACS-2, §8.x in DACS-3, §9.x in DACS-4, §10.x in DACS-5; everything else is in this Core document.
+A cross-reference to §6.x lives in DACS-1, §7.x in DACS-2, §8.x in DACS-3, §9.x in DACS-4, §10.x in DACS-5, §A in DEMOS-MAPPING, §12.x in THREAT-MODEL, §13 in GLOSSARY, §14.x in CONFORMANCE-PLAN; everything else is in this Core document.
 
 ## Chapter 11 — Stewardship, versioning, follow-on
 
@@ -488,321 +438,15 @@ Some of these will reveal gaps that need new work, not just refinement. The inte
 
 ## Chapter 12 — Unified threat model
 
-This chapter collects, partitions, and rationalises the per-chapter security considerations into a unified threat model. It is the artifact a security review would start from. Where this chapter restates per-chapter threats, the per-chapter mitigation is normative; this chapter’s framing is informative.
-
-### 12.1 Scope and non-goals
-
-DACS’s security goals are:
-
-- (a) cryptographic non-repudiation of every per-session artifact (listings, bundles, agreements, evidence) by the parties that produced them;
-- (b) tamper-evident audit trail — any modification of an anchored artifact is detectable by content-hash comparison;
-- (c) limited-trust substrate dependency — the substrate is trusted for liveness and consensus per its own security model, not for application-layer semantics;
-- (d) prevention of cross-protocol signature confusion via the universal domain-separation scheme in §B.7;
-- (e) prevention of replay across sessions via per-session jobIds, nonces, and content hashes;
-- (f) substrate-failure isolation in reputation derivation so substrate outages do not damage party reputations.
-
-Non-goals:
-
-- DACS does **not** prevent collusion between buyer and seller. Two parties who jointly fabricate a session produce a valid session; the audit trail records what they say happened, not what objectively happened.
-- DACS does **not** prevent denial-of-service by a counterparty or by the substrate. It produces evidence of the failure for reputation purposes, but does not guarantee progress.
-- DACS does **not** prevent regulatory non-compliance. It produces artifacts useful for compliance audit but does not enforce any specific regulatory regime.
-- DACS does **not** provide unconditional privacy. The SR-4 channel contents stay between members, but member identity and timing of commitments are visible on the public chain by design.
-
-**The visibility non-goal extends to the audit layer.** Anchored DACS-5 bundles, commit-agreement records, and DACS-2 vet attestations carry party **primary claims — durable authority-issued identities (LEI, FINRA-CRD, …) — in cleartext at derivable addresses**. A passive observer can therefore reconstruct the **counterparty graph** (who transacted with whom, correlatable across every session an identity runs) with **no cryptography to break**, and can read each vet attestation's `scheme:identifier:decision` (e.g. "party X was screened against OFAC → clear"). DACS accepts this by design — it is an *accountability* standard, and a public, verifiable audit trail necessarily exposes the relationship. Raw private *values* behind a verification are separately protected by the §7.5 public-anchor data-minimisation rule; only predicate outcomes are exposed.
-
-> **Note (non-normative).** A confidentiality layer that anchors these records **encrypted to the parties** while keeping the content hash public for tamper-evidence is roadmap work, not v0.1.
-
-### 12.2 Adversary model
-
-The threat model assumes adversaries with the following capabilities; per-threat mitigations specify which class is being defended against.
-
-| Adversary class | Capabilities | Assumed not capable of |
-| --- | --- | --- |
-| Network observer | Reads all public-chain traffic; can perform timing analysis on commitments; **can reconstruct the counterparty graph from anchored bundles / commit-agreement records / vet attestations (cleartext primary claims at derivable addresses) and read each vet attestation's scheme:identifier:decision**; cannot read private-channel contents. | Breaking standard cryptographic primitives (sha256, Ed25519, ECDSA-secp256k1 under standard assumptions); recovering the raw private values behind a verification (predicate-outcome-only under §7.5 minimisation). |
-| Network active attacker | Can drop, delay, reorder, or inject messages on transport links; can MITM TLS sessions if PKI is compromised. | Forging signatures by valid private keys; producing sha256 preimages. |
-| Malicious counterparty | Operates a fully-conformant DACS implementation but maximises self-interest within the protocol; signs everything they’re willing to be held to and refuses to sign anything else. | Forging the other party’s signatures; controlling validator-set consensus on the substrate. |
-| Compromised authority | A registry authority (GLEIF, FINRA, OFAC, etc.) returns false data, either by deliberate compromise or by API corruption. | Forging substrate-validator signatures over the false response (validators sign the fetch result, not the data’s factuality). |
-| Substrate validator-set minority | A minority of substrate validators is compromised; the consensus protocol’s normal Byzantine bound holds. | Producing valid consensus signatures on falsehoods (assuming the BFT assumption holds). |
-| Substrate validator-set majority | A majority of substrate validators is compromised. | (none — above the substrate’s security floor; DACS inherits the failure.) |
-| Substrate operator (rotating shard) | For Liquidity Tank-style SR-5: the rotating validator shard operating tanks is partially compromised within its multisig threshold. | Bypassing the 2/3 BFT multisig or the deployer emergency-recovery path. |
-| Channel operator (SR-4) | Operates the private negotiation channel; can drop messages, fork views, observe all member messages. | Forging member signatures inside the channel; observing messages encrypted to a member subset (with realisation-appropriate encryption). |
-| Recipe-registry attacker | Compromises the recipe registry signing key, attempts to push poisoned recipes. | Backdating recipe-version pinning; affecting already-pinned sessions. |
-| Sybil attacker | Generates unlimited low-tier (key:…) identities and farms self-deal reputation. | Generating authority-issued claims (lei, finra-crd, etc.) without owning the underlying registrations. |
-| Malicious orchestrator | Drives the session pipeline, assigns `errorClass`, constructs the SessionRecord, and MAY be a distinct REQUIRED signer (§10.4.1); can misclassify failures, drop or reorder phase results, or selectively anchor. | Forging buyer/seller signatures, or producing a both-sided-signed bundle without honest-party consent (§10.11 two-sided independent bundles; party-disagreement → aborted-by-other). |
-| Malicious infrastructure | Operates discovery/index/storage infrastructure a party depends on (catalog API, listings index, anchor host); can serve poisoned, stale, or withheld data on the read path. | Forging the signatures on the signed artifacts it serves (consumers dereference anchors and verify content hashes + signatures independently). |
-| Malicious verifier | Runs the DACS-2 vet path; can mis-run a recipe, substitute a method, or assert a decision the authority did not return. | Forging the authority's signed/consensus-anchored response, or a recipe steward signature; producing a VerifyResult that re-derives correctly under method/recipe-version checks. |
-| Spam / resource-exhaustion adversary | Floods a public surface (ERC-8004 registry writes, negotiation-channel griefing, mempool) to raise cost or degrade availability. | Forging identities or claims (each write/identity costs); breaking liveness of correctly-rate-limited or staked surfaces. |
-
-**Reconciling the §12.4 "Primary adversary" column with this model.** Every §12.4 row's adversary resolves to a class above, with two conventions:
-
-- (a) **Variants of an existing class** — "competing bidder" and "two colluding counterparties" are *Malicious counterparty* (single and colluding); "public-mempool observer" is *Network observer*; "storage operator" is *Malicious infrastructure*.
-- (b) **Non-adversary conditions** — "time" (TOCTOU / stale-window races) and "implementation bug" (e.g. decimal overflow) are **environmental / robustness** conditions, not adversaries. The threat is real and the cited mitigation stands, but there is no actor to model; these rows are defended by deterministic rules and bounds, not by an adversary assumption.
-
-### 12.3 Trust boundaries
-
-A reader following the audit trail from a DACS-5 bundle backwards through the lifecycle crosses these trust boundaries; each boundary has its own assumptions.
-
-- **Party-to-party cryptographic boundary.** Every signed artifact (listing, bundle, agreement, evidence, rating) is verifiable against the signer’s primary-claim key. Trust assumption: the signing key has not been compromised at or before the artifact’s timestamp. Mitigation: key-rotation handling per §6.6 (DACS-1 security considerations).
-- **Party-to-authority boundary.** A DACS-2 VerifyResult of method consensus-backed-proxy depends on the authority (GLEIF, FINRA, OFAC, etc.) being honest at fetch time and on the TLS PKI between the substrate validators and the authority. Mitigation: the recipe’s alternatives mechanism (§7.4) lets high-stakes schemes declare additional independent verification methods (§7.12); the v0.2 strengthening (§7.3.5) will tighten the consensus-backed-proxy method itself.
-- **Party-to-substrate boundary.** Every anchor (listings, bundles, evidence, recipes, rails) depends on the substrate’s SR-2 implementation for availability and content integrity. Trust assumption: substrate validator-set is honest per the substrate’s consensus protocol. Mitigation: on-substrate anchoring (Storage Programs on Demos) provides indefinite availability; off-substrate anchoring (IPFS, HTTPS) is best-effort.
-- **Substrate-to-substrate boundary (cross-chain).** SR-5 atomic settlement crosses chains and depends on the SR-5 mechanism’s trust model (HTLC: cryptographic only; Liquidity Tank: substrate operator; substrate-native: substrate consensus). Mitigation: explicit rail-trust-model disclosure in rail definitions; per-stake rail selection.
-- **Party-to-recipe-registry boundary.** Verification routes through recipes whose signing authority is the registry steward (currently KyneSys Labs, per §7.4.4 and §11.1.1). Trust assumption: the steward’s signing key is honest and uncompromised. Mitigation: monotonic recipe-version pinning per session; emergency-revision discipline (§7.4.4). Residual risk under PA-2: steward-key compromise; PA-3 multi-signature governance is the v0.2+ mitigation pathway.
-
-### 12.4 Threat catalogue
-
-Every per-chapter security threat, indexed by adversary class and mitigation status. The threats are stated normatively in the per-chapter sections; this is the cross-reference.
-
-| Threat | Primary adversary | Where mitigated | Status |
-| --- | --- | --- | --- |
-| Forged listing | malicious counterparty | §6.6 + §B.7 (signatures + domain separator) | mitigated |
-| Identity-bundle replay | network observer | §6.3.2 (session nonce) + §6.6 | mitigated |
-| Attestation-bundle replay across sessions | malicious counterparty | §10.11 (jobId bound into the bundle hash) | mitigated |
-| Catalog poisoning | malicious infrastructure | §6.3.6 (clients dereference anchors) | mitigated |
-| Identity-claim substitution | malicious counterparty | §6.6 (pinned bundle hash) | mitigated |
-| Method substitution | malicious verifier | §7.12 (method field comparison) | mitigated |
-| Recipe poisoning | recipe-registry attacker | §7.12 (signed recipes + pinned recipeVersion) | mitigated |
-| Substrate validator capture (SR-3) | substrate validator-set majority | §7.12 (multi-method alternatives) | partial — v0.2 strengthening planned |
-| Authority-endpoint TLS MITM (forged authority response) | network active attacker (PKI compromise) | §7.3.5 (v0.2 validator-body-signed) + §7.4 (multi-method alternatives) | partial — v0.2 strengthening planned, residual in v0.1 |
-| Negative-match fail-open (truncated sanctions list clears a listed party) | malicious infrastructure / lossy fetch | §7.4.1 PSP-5 (completeness floor before a negative `pass`) | mitigated |
-| Verifiable-presentation replay (verified VC re-presented by a non-holder) | malicious counterparty | §7.3.2 (VP holder-binding to session nonce) | mitigated |
-| HTLC preimage-reveal front-running | network observer / MEV | §9.5.4 (claims are beneficiary-bound — a front-runner cannot redirect funds; ordering/MEV is a chain-level concern, not a DACS theft vector) | mitigated (theft) / residual (ordering) |
-| Rail availability-field poisoning (read before pin) | malicious infrastructure | §9.4.4 (availability pinned from the authoritative rail definition at session start, not a cached/untrusted read) | mitigated |
-| Cross-session offer replay (channelId reuse) | malicious counterparty | §8.12 CH-6 (channelId unique per session) | mitigated |
-| Counterparty-graph reconstruction (cleartext primary claims at derivable anchor addresses) | network observer | §12.1 (accepted by design — public audit trail; requires no crypto; encrypted-to-parties anchoring is roadmap) | accepted by design |
-| Vet-attestation disclosure (anchored VerifyResult reveals "party X screened against authority Y → outcome Z") | network observer | §7.5 (public-anchor data minimisation — predicate outcomes only, no raw PII) + §12.1 (scheme:identifier:decision accepted by design) | partial — raw PII minimised; relationship/decision accepted by design |
-| VerifyResult replay | malicious verifier | §7.12 (identifier + bundle hash binding) | mitigated |
-| TOCTOU authority change | time | §7.12 (maxAge tightening) | parameter-driven |
-| Indeterminate exploitation | malicious counterparty | §7.5.1 + §7.7.1 (aggregation) | mitigated |
-| Channel-operator censorship | channel operator | §8.12 (CH-4 liveness detection) | mitigated (substrate-dependent) |
-| Channel-operator forking | channel operator | §8.12 (monotonic sequence + cross-check) | mitigated |
-| Offer replay across sessions | network observer | §8.12 (channelId in envelope) | mitigated |
-| Cross-artifact signature replay | malicious counterparty | §B.7 universal domain separators | mitigated |
-| HTLC asymmetric-loss blame ambiguity (window-expired ST-8 reads failed-counterparty for both sides) | time / malicious counterparty | §10.11 (out-of-band review of settlement-atomicity-marked failed-counterparty) | partial — DACS-X dispute concern |
-| HTLC free-option abandonment (payer declines reveal after market move; payee capital locked) | malicious counterparty | §9.5.4 HTLC-10 (prefer liquidity-tank or payer stake; DACS-5 records the pattern) | partial — known HTLC property, not standardised in v0.1 |
-| Sealed-envelope front-running | competing bidder | §8.12 (hash commitment + private channel) | mitigated |
-| Sealed-envelope post-deadline submission | malicious counterparty | §8.4.3 (chain-timestamp anchoring) | mitigated |
-| Agreement-listing mismatch | malicious counterparty | §8.5.2 (validation in commit-agreement) | mitigated |
-| Re-entrancy on EVM rails | malicious counterparty | §9.13 (phase-handler ordering) | implementation-dependent |
-| MEV front-running on payments | public-mempool observer | §9.13 (private mempool option) | parameter-driven |
-| Cross-chain atomicity failure | time / chain operator | §9.13 (HTLC timelocks) | mitigated for HTLC; SR-5 implementation-dependent for tanks |
-| Liquidity-tank operator compromise | substrate operator | §9.13 (substrate consensus + 15-day recovery) | partial — substrate-trust-floor |
-| AP2 mandate replay | network observer | §9.13 (AP2 nonce/expiry) | inherited from AP2 |
-| x402 receipt forgery | malicious server | §9.13 (signature verification) | inherited from x402 |
-| Refund laundering | malicious seller | §9.13 (anchored amendments) | mitigated |
-| Decimal-overflow on cross-decimal pay | implementation bug | §9.13 (string-decimal arithmetic) | mitigated |
-| Bundle forgery | malicious counterparty | §10.11 (co-signature requirement) | mitigated |
-| Bundle suppression | malicious counterparty | §10.11 (one-sided bundle classification) | mitigated |
-| Sybil reputation farming | sybil attacker | §10.11 (per-primary-claim keying) | mitigated for cross-tier; not for same-tier |
-| Reputation collusion | two colluding counterparties | §10.11 (volume disclosure + external signals) | partial — protocol cannot prevent |
-| Orchestrator error-class misclassification | malicious orchestrator | §10.11 (party-disagreement → aborted-by-other) | mitigated |
-| Bundle anchor unavailability | storage operator | §10.11 (on-substrate anchoring) | mitigated (substrate-dependent) |
-| Stale reputation windows | time | §10.11 (explicit window bounds) | consumer-driven |
-| ERC-8004 write spamming | spam adversary | §10.11 (gas cost + per-session rate limit) | mitigated |
-| RFQ session-initiation flooding | malicious counterparty | §8.12 (per-counterparty session-rate limit + optional DACS-2 admission floor) | partial — maxTurns/timeoutSec bound a session, not the initiation rate |
-| Sealed-envelope commit-spam | malicious counterparty | §8.12 (optional bidder stake + commit-anchor rate limit) | partial — v0.1 does not standardise stake or bidder eligibility |
-
-### 12.5 Composite trust property
-
-A DACS-5 bundle that validates against all per-chapter conformance rules and whose contained references all dereference and validate provides the following composite trust property to a consumer:
-
-> "Two or more parties identified by the named primary claims (with the trust profile each claim’s scheme implies) participated in a session against the named listing version, agreed to the named terms, exchanged the named settlements, and produced this audit record. The substrate operator did not collude with the parties to forge the record. The recipe registry was not compromised at the time of the verifications. The composed external standards (W3C VC, TLSNotary, ACME, etc.) behaved per their own security models."
-
-This is the composite security claim of DACS v0.1. Each clause has explicit mitigation in the per-chapter sections; each has explicit residual risk in this chapter’s adversary model.
+Moved to **[THREAT-MODEL.md](THREAT-MODEL.md)** (section numbering retained). Adversary model, trust boundaries, threat catalogue, and the composite trust property. Where this chapter restates per-chapter threats, the per-chapter mitigation is normative; this chapter's framing is informative.
 
 ## Chapter 13 — Glossary
 
-A single alphabetical glossary across all five per-stage standards, the front matter, and the back matter. Terms defined in multiple chapters are cross-referenced. This glossary is informative; per-chapter definitions are normative.
-
-- **AgreementDocument.** The canonical signed JSON document produced by a DACS-3 negotiation pattern, carrying the final agreed terms. Defined in §8.5.
-- **Anchor / Anchored.** Stored on the substrate such that an anchor reference (substrate-native pointer plus content hash) is sufficient for any party with substrate access to retrieve canonical content and verify integrity. Realised by SR-2.
-- **AttestationBundle.** The frozen end-of-session artifact, signed by all parties, anchored via SR-2. The DACS-5 audit unit. Defined in §10.4.
-- **AttestationRef.** A reference to an anchored attestation: anchor locator + content hash + (optional) signer. Defined in §7.5.
-- **anchoredByRole.** Per-copy AttestationBundle field naming the role (buyer/seller/orchestrator) that anchored that copy; the copy's `outcome` is recorded from that party's perspective. Excluded from the hashed canonical form (so the two-sided copies stay equal) and integrity-checked against the anchor address instead. Defined in §10.4.1/§10.4.2.
-- **Auto-accept commitment.** A pre-issued seller-side commitment authorising auto-acceptance of buyer signatures under negotiate-fixed-price. Defined in §8.4.1.
-- **Bundle (identity bundle).** An ordered set of claims a party presents about itself, each independently verifiable, plus a presentation signature. Defined in §6.3.2.
-- **BundleParty.** A party reference within a DACS-5 AttestationBundle. Defined in §10.4.
-- **Canonical form.** RFC 8785 JCS serialisation of a document with signature field(s) omitted.
-- **Catalog.** An off-chain index aggregating DACS-1 listings across many sellers for discovery. Defined in §6.3.6.
-- **CCI (Cross-Context Identities).** The Demos implementation of SR-1 — cross-substrate identity aggregation. Demos product feature; not a DACS specification term.
-- **Claim.** A fact a party asserts about itself.
-- **Claim reference / ClaimReference.** A typed identifier referring to the external system that holds a claim. Grammar in §6.3.1; type definition in §7.1.
-- **ClaimRequirement.** A listing-side declaration of which claims a buyer or seller bundle must include. Defined in §6.3.3.
-- **Commit-agreement.** The DACS-3 phase that anchors the agreement hash on the public chain. Defined in §8.6.
-- **CommitmentRecord.** The on-chain record produced by commit-agreement. Defined in §8.6.
-- **CompositeVerificationRecord.** The document the DACS-2 vet-credentials phase produces, aggregating freshness checks, supplementary signals, and deal-specific claims. Defined in §7.7.
-- **Content hash.** sha256 hex of the canonical form of a document.
-- **DACS-1..5.** The five per-stage standards: Identify, Vet, Negotiate, Settle, Verify.
-- **DACS-X.** Anticipated future standard for dispute resolution; not part of v0.1.
-- **DAHR (Data Agnostic HTTPS Relay).** The Demos implementation of SR-3 — consensus-backed proxy attestation of HTTP responses.
-- **Deliverable / DeliverableSpec / DeliverableRef.** The thing being delivered to the buyer; spec defines its shape; ref points to a specific instance. Defined in §9.3.
-- **Domain separator.** A protocol-specific string prepended to a hash before signing, preventing cross-protocol signature replay. Universal registry in §B.7.
-- **EntitlementRecord.** A DACS-4 deliverable record granting time-bound access to a service. Defined in §9.6.2.
-- **errorClass.** A classification of why a phase failed: permanent, transient, counterparty, substrate, settlement-atomicity. Used in PhaseHandlerResult and BundlePhaseEntry.
-- **Evidence (SettlementEvidence).** The uniform record produced by every DACS-4 payment and delivery phase. Defined in §9.7.
-- **Extended-pointer pattern.** A pattern for handling artifacts larger than the substrate’s anchored-storage cap: the canonical address contains a pointer with externalUrl + externalContentHash; payload is hosted externally. Used by deliverables (§9.6.1) and bundles (§10.4.2).
-- **Fixed-price negotiation.** DACS-3 pattern in which the buyer accepts the listed terms. Defined in §8.4.1.
-- **HKDF.** The key derivation function specified in RFC 5869; used in HTLC preimage derivation per §9.5.4.
-- **HTLC.** Hash Time-Locked Contract; the generic atomic-swap pattern used by pay-cross-chain-htlc. §9.5.4.
-- **IdentityBundle.** See "Bundle".
-- **Indeterminate.** A DACS-2 VerifyResult.decision value indicating the authority returned a parseable response that conclusively neither confirmed nor denied the claim. Distinct from "error" (verifier could not reach a decision at all). §7.5.1.
-- **Error (decision value).** A DACS-2 VerifyResult.decision value indicating verification could not complete due to transport failure, parser exception, or other verifier-side failure. Distinct from "indeterminate" (authority answered, but ambiguously). §7.5.1.
-- **JCS.** JSON Canonicalization Scheme; RFC 8785; used for canonical-form serialisation throughout.
-- **jobId.** Per-session unique identifier; ULID or substrate-equivalent. Defined in §10.3.
-- **L2PS (Layer-2 Privacy Subnets).** The Demos implementation of SR-4 — identity-keyed private coordination channels.
-- **Liquidity Tank.** The Demos implementation of SR-5 — pre-funded cross-chain settlement primitive.
-- **Listing.** A signed, anchored JSON document declaring an agent’s offering. The canonical contract for a transaction. Defined in §6.3.4.
-- **ListingIndex / ListingSummary.** Discovery data structures; not the source of truth. Defined in §6.3.5–6.3.6.
-- **negotiate-fixed-price / negotiate-rfq / negotiate-sealed-envelope.** The three DACS-3 negotiation patterns. §8.4.
-- **PaymentRailRef / RailDefinition.** Reference to and full definition of a DACS-4 payment rail. §9.3, §9.4.
-- **Per-claim keying.** DACS-5 rule that reputation is keyed against the bundle’s primary identity claim, not a wallet or signing key. §10.5.2.
-- **perspective_flip.** The DACS-5 reconciliation mapping that re-interprets a counterparty-anchored bundle's `outcome` relative to the scored party (aborted-by-self ↔ aborted-by-other; failed-perm ↔ failed-counterparty). Buyer↔seller only. §10.5.1.
-- **Phase / PhaseStep / PhaseType.** A single unit of work in a session pipeline. PhaseType is the closed enumeration across DACS-2..5. §6.3.4.
-- **PhaseHandlerResult.** The return shape of every phase handler. §B.5 (front matter).
-- **Pipeline.** The ordered sequence of PhaseStep entries declared in a listing. §6.3.4.
-- **Presentation signature.** The signature on an identity bundle. §6.3.2.
-- **sr1-root presentation.** A bundle-presentation kind in which a single SR-1 root key co-signs every claim under one aggregate signature, producing a single cryptographic artifact for the whole bundle. The natural presentation for a party self-binding a single document. §6.3.2.
-- **Primary identity claim.** The claim within a bundle that serves as the canonical identifier of the party for reputation, audit, and addressing.
-- **Rate phase.** Optional DACS-5 phase producing structured ratings between parties. §10.6.
-- **RatingRecord.** A signed rating from one party about another. §10.6.
-- **Recipe.** A DACS-2 binding of claim scheme to verification method, parsing rules, and defaults. §7.4.
-- **Recipe availability.** A normative field on every Recipe declaring operational status: live | operator_gated | closed_data | bilateral | mocked | disabled | failed. Verifiers MUST inspect before running. §7.4.5.
-- **Rail availability.** A normative field on every RailDefinition declaring operational status, with the same value set and semantics as recipe availability. Orchestrators MUST inspect before selecting. §9.4.4.
-- **RFQ (Request For Quote).** DACS-3 bilateral negotiation pattern; bounded multi-turn offer-and-counter. §8.4.2.
-- **Sealed-envelope.** DACS-3 sealed-bid procurement pattern. §8.4.3.
-- **Session.** A per-transaction lifecycle from Identify through Verify.
-- **SessionContext.** The context object every phase handler receives. §B.5 (front matter).
-- **SessionRecord.** The orchestrator’s mutable working-state document. §10.3.
-- **settle-asymmetric.** Non-terminal DACS-5 session state for the HTLC-9 cross-chain open case (payer claimed the destination, payee's source claim not yet final); resolves forward to settle-completed on a final htlc-claim, or to settle-failed on window expiry. §10.3.1 (ST-8).
-- **SettlementAmendment.** A post-settlement record for refunds and corrections. §9.7.1.
-- **SIWD (Sign-In With Demos).** Demos-wallet authentication pattern; EIP-4361-style envelope. Used for bundle presentation signatures.
-- **SR-1..5.** Substrate requirements: SR-1 cross-substrate identity aggregation; SR-2 anchored immutable storage; SR-3 consensus-backed proxy attestation; SR-4 identity-keyed private coordination; SR-5 multi-chain coordinated atomic settlement. Defined in §5 (front matter).
-- **Stor-backed credential.** A DACS-1 claim scheme whose verification result is anchored as a Storage Program. §6.3.1.
-- **Storage Program.** The Demos implementation of SR-2 — content-addressed anchored key-value storage. 128 KB soft cap.
-- **Substrate.** The underlying blockchain or protocol stack that hosts a DACS implementation. Demos is the v0.1 reference substrate.
-- **Substrate-validator-set claim.** A ClaimReference identifying a substrate validator-set epoch; used as the signer for consensus-backed-proxy attestations. §7.5.
-- **supersedesEvidenceRef.** SettlementEvidence field on an ST-8 `:resolved` success record pointing to the interim failure record it supersedes; a same-phase supersession, not a refund amendment. §9.7 / ST-8.
-- **TxRef / ChainTxRef.** Discriminated union of on-chain transaction references. §9.3.
-- **Universal signature scheme.** The cross-stack domain-separation scheme requiring every DACS signature to bind to a per-artifact-kind separator. §B.7.
-- **ULID.** Universally Unique Lexicographically Sortable Identifier; recommended jobId format.
-- **validator-set claim.** See "Substrate-validator-set claim".
-- **VerifyResult / VerifyResultRef.** The uniform record every DACS-2 method produces; reference to an anchored VerifyResult. §7.5.
-- **Vet-credentials phase.** The DACS-2 phase that runs verification across the counterparty’s bundle. §7.8.
-- **Well-known/agent.json.** The A2A capability-discovery surface that DACS extends with a dacs block. §6.3.5.
+Moved to **[GLOSSARY.md](GLOSSARY.md)** (section numbering retained). A single alphabetical glossary across all five per-stage standards and the front/back matter. Informative; per-chapter definitions are normative.
 
 ## Chapter 14 — Conformance test plan
 
-This chapter sketches the test categories an implementer should cover to claim conformance to each DACS standard. It is a **plan, not a test suite**; the test suite itself (test vectors, expected outputs, golden files) is produced separately and tracked alongside reference implementations. Where a chapter’s conformance summary enumerates labelled rules (e.g., BP-1, LR-2, CM-3), the test plan groups them into runnable categories.
-
-### 14.1 DACS-1 — Identify
-
-Exercise each rule at its normative home; full text is not restated (define-once). Fixtures under `conformance/`.
-
-| Rules | Home | Exercise (intent) | Vectors |
-| --- | --- | --- | --- |
-| Claim-reference parser | §6.3.1 | every scheme: valid canonical / valid non-canonical (canonicalise on read) / invalid grammar (reject) / unknown-scheme (not silently accepted) | `conformance/vectors/` |
-| BP-1..BP-4 (bundle producer) | §6.3.2 | produce → canonical form → hash → domain-separated sign → anchor round-trip | `conformance/fixtures/identity/` |
-| BR-1..BR-5 (bundle reader) | §6.3.2 | accept-conformant; reject unsigned / missing-required-`verifiedBy` / unverified-`presentedBy`-when-selector-set; unknown-scheme → unverified; SIWD `dacs:<hex>` Resource + session-`Nonce` match | `conformance/fixtures/identity/` |
-| match() (BundleRequirement) | §6.3.3 | required missing / required failing / oneOf satisfied / oneOf unsatisfied / selector match / mismatch | `conformance/vectors/` |
-| LP-1..LP-4, LR-1..LR-3 | §6.3 | publisher: sign / anchor / version-monotonicity / revocation; reader: halt-on-first-failure, revoked refusal, size-cap | `conformance/vectors/` |
-| Discovery | §6.3.6 | well-known parser; catalog endpoint shape; anchor cross-check from `ListingSummary` | `conformance/vectors/` |
-| IT-1..IT-3 (identity tier) | §6.3.2.1 | derive from verified-and-fresh claims only; ignore self-asserted; deterministic; institutional precedence; stale-`verifiedBy` does not elevate | `conformance/fixtures/identity/` |
-
-### 14.2 DACS-2 — Vet
-
-| Rules | Home | Exercise (intent) | Vectors |
-| --- | --- | --- | --- |
-| CM-1..CM-5 (method common) | §7.3 | per-method: input-shape; pass/fail/indeterminate; attestation anchoring; `VerifyResult` with correct method; canonical form + domain-sep signature | `conformance/fixtures/` |
-| RA-1..RA-5 + resolution | §7.4 | steward-sig + domain separator; canonical anchoring; version monotonicity; supersede-on-replace; index lookup; content-hash; version pinning | `conformance/` |
-| PSP-1..PSP-5 | §7.5.1 | match-predicate per format; parse-fail → error (not fail); negative-match inversion; `indeterminateOn` before match; dataMap extraction non-deciding; deterministic (no script/sub-fetch/redirect); PSP-5 completeness floor before a negative `pass` | `conformance/` |
-| VP-R1..VP-R4, VP-C1..VP-C3 | §7.6.1 | transient retry / permanent no-retry / new-attestation / no-retry-on-indeterminate; reuse within effective window; maxAge tightens never widens | `conformance/` |
-| Aggregation | §7.7.1 | classify_required branches; oneOf within-group precedence error>indeterminate>fail; cross-accumulator fail>error>indeterminate; VPC-4 counterparty-malformed attribution | `conformance/` |
-| RAV-1..RAV-7, RAV-R1..RAV-R5 | §7.4.5, §9.4.4 | recipe availability consumer+steward behaviour; rail preflight; no disabled/failed selection; RAV-R5 authoritative signed read | `conformance/` |
-| VPC-1..VPC-4, MA-1..MA-3 | §7.8, §6.3.3 | phase order / two-sided / anchor-before-return / fail-or-indeterminate; matching + `presentedBy` verification | `conformance/` |
-| WN-1..WN-6 (warnings) | §7.7 | advisory-only; MUST NOT move `overallDecision`; preserved on `pass`; `suggestedRetryAfterMs` doesn't override recipe; unknown-code conservative | `conformance/fixtures/` |
-
-### 14.3 DACS-3 — Negotiate
-
-| Rules | Home | Exercise (intent) | Vectors |
-| --- | --- | --- | --- |
-| Channel envelope + failure | §8.3.3, §8.12 | channelmsg domain-sep sig; sequence monotonicity; signature scope; liveness-exceeded → channel-failed; abort round-trip | `conformance/` |
-| negotiate-fixed-price | §8.4.1 | live signature path; auto-accept commitment + instance-signature path; reject pre-issued per-instance signatures | `conformance/` |
-| RFQ-1..RFQ-4 | §8.4.2 | maxTurns; turn-timeout; out-of-band-terms rejection at commit-agreement | `conformance/` |
-| SE-1..SE-7 | §8.4.3 | commitDeadline (chain-timestamped); reveal-window vs SR-2 anchor (SE-3); mismatch exclusion; anchored-reveal-set selection (relay-suppression); exclusion ordering (currency/non-positive before reserve); reserve floor/ceiling inclusive; tie-break (SE-5); empty-set → negotiate-failed; rule-ref content-hash binding (SE-6); bidHash domain-sep + salt floor (SE-7) | `conformance/` |
-| PS-1..PS-3 | §8.8 | exactly-one negotiate phase; commit immediately follows; pattern ↔ pricing-model compatibility | `conformance/` |
-| Agreement validation | §8.5.2 | price-band / rail-acceptance / deliverable / deadline / pattern checks; `priceAnchor` valid-when-present, optional | `conformance/` |
-| CA-1..CA-4 | §8.6 | refuse-advance-until-ok; double-commit reject; immutability after anchor; domain-sep commitment signature | `conformance/` |
-
-### 14.4 DACS-4 — Settle
-
-Exercise each rule at its normative home; the full rule text is **not** restated here (define-once — same discipline as the §12.4 threat index). "Exercise" is one-line test intent; executable fixtures live under `conformance/`.
-
-| Rules | Home | Exercise (intent) | Vectors |
-| --- | --- | --- | --- |
-| RD-1..RD-5 | §9.4.3 | steward-sig + domain separator; anchor; version monotonicity; railType↔asset/network consistency | `conformance/fixtures/settlement/` |
-| PC-1..PC-7 | §9.5.1 | input-shape; anchored evidence; correct `attestationRef` (deferrable under PC-7); all `errorClass` values; PC-5 currency-resolution; PC-6 `settlementFinality` present-on-success/absent-on-delivery; PC-7 cross-chain anchor decoupling | `conformance/fixtures/settlement/` |
-| HTLC-1..HTLC-10 | §9.5.4 | buyerSalt entropy/confidentiality/non-reuse; HKDF derivation + input-uniqueness; canonical claim order; per-chain hashlocks; timelock asymmetry on absolute expiry (pinned params, source-finality margin); HTLC-9/ST-8 asymmetric resolution; HTLC-10 free-option | `conformance/fixtures/settlement/htlc9-asymmetric.json` |
-| CD-1 | §B.2 | economically-equal decimals (`"1.50"`=`"1.5"`) → identical hashes/signatures | `conformance/vectors/` (CD-1) |
-| AMEND-1..AMEND-4 | §9.7.1 | `amendsEvidenceRef` resolves + jobId match; refund/partial-refund reference success-only; summed `refundAmount` ≤ `paymentAmount`; flagged-amendment not treated as valid unwind | `conformance/fixtures/settlement/` |
-| PIPE-1..PIPE-5 | §9.9 | ≥1 deliver (pay-* optional, §6.3.4(8)); deterministic ordering; pay↔deliver gating; phase repetition | `conformance/vectors/` |
-| Per-rail procedures | §9.5.2–§9.5.7 | erc20/spl decimal-conversion (no float) + finality wait; tank BridgeOperation lifecycle + route scope; ap2/x402 mandate-revocation + receipt-signature | `conformance/fixtures/settlement/` |
-| Delivery phases | §9.6 | storage-program (normal + extended-pointer); entitlement sig/anchor/scope; attested-payload composing a DACS-2 attestation | `conformance/fixtures/` |
-
-### 14.5 DACS-5 — Verify
-
-| Rules | Home | Exercise (intent) | Vectors |
-| --- | --- | --- | --- |
-| ST-1..ST-8 (state machine) | §10.3.1 | every `(from→to)` legal-only; illegal-pair reject (ST-1); abort from any `*-pending` (ST-3); rate branch + non-fatal (ST-4/5); ST-7 pause→resume / →failed-substrate; ST-8 `settle-asymmetric` forward-resolution (→completed on final source-claim, →failed-counterparty on expiry, →paused on SR-2 outage), non-terminal; terminal→`outcome` map (ST-6) | `conformance/fixtures/settlement/` |
-| Bundle production | §10.4 | two-sided anchoring at role addresses; `anchoredByRole` ↔ address (mismatch rejected); canonical-equality happy path (excludes anchoredByRole/signatures); `dacs-bundle:v1:` sig; extended-pointer | `conformance/fixtures/` |
-| Bundle consumption | §10.4.3 | two-sided lookup; one-sided → aborted-by-self; divergence = `outcome`/`phaseSummary` contradiction (advisory skew is NOT divergence); per-party policy; "disputed" is a consumer verdict, not an outcome value | `conformance/fixtures/` |
-| Reputation derivation | §10.5.1 | all outcome partitions; party-fault denominator excl. failed-substrate; null vs zero; empty-input totality; two-sided reconciliation + `perspective_flip`; reconciliation guards; rating de-duplication | `conformance/fixtures/reputation/` |
-| Determinism receipt | §10.5.3 | `bundleRefs` = `reconciled` set, ascending-`contentHash` order; re-derive byte-identical `metrics`/`bundleCount` under recorded `windowingBasis`; omitting basis or mis-ordering is non-conforming | `conformance/` |
-| Category-scoped derivation | §10.5.4 | prefix filter before §10.5.1; non-resolving `agreementRef` excluded; exact-or-`category+"."` prefix; hint accuracy | `conformance/` |
-| RT-1, RT-2 (rate phase) | §10.6.1 | run-after-settle; one-record-per-direction; rating domain-sep sig; RT-1 producer-reject out-of-range/over-length; RT-2 deriver-exclude non-conforming; `dimensions` opaque | `conformance/` |
-| ERC-8004 publication (optional) | §10.7 | token-owner-signed entry; bundle-anchor pointer; rate-limit | `conformance/` |
-
-### 14.6 Universal signature scheme & canonical form (SIG-1..SIG-5, CF-1..CF-4, CD-1)
-
-A cross-cutting test category that every conforming implementation runs once:
-
-- Sign every artifact kind in §B.7 with a known key; verify with the same key against the domain-separated payload; reject if the verifier reconstructs without the separator.
-- Cross-artifact replay test: take a valid signature on artifact kind A, attempt to verify it as a signature on artifact kind B with the same hash bytes; verification MUST fail.
-- Unknown-artifact x-* prefix test: implementations encountering an unknown domain separator MUST reject; experimental x- separators MUST be accepted only with out-of-band agreement.
-- **CF-1 (NFC).** A document carrying a non-ASCII identifier supplied in NFD form MUST hash and verify identically to the same document supplied in NFC form; a verifier MUST normalise before recomputing the canonical form.
-- **CF-2/CF-3 (ClaimReference canonical form & identity).** `CCI-LEI:…` and `cci-lei:…` MUST produce identical content hashes when embedded in a signed document (scheme case-folded). Two references differing only in parameter order MUST produce identical canonical bytes; two references differing only in the presence/value of parameters MUST resolve to the same reputation key (parameters excluded from identity).
-- **CF-4 (logical-address encoding).** A logical address built from a multi-colon primary claim MUST round-trip: assemble → derive native address → split the logical address back into `{sellerPrimaryClaim, listingId, listingVersion}` and percent-decode each to the exact originals. Likewise, per address kind:
-  - the DACS-4 payment-evidence address `dacs4:payment:{jobId}:{railId}:{phaseIndex}` MUST round-trip a multi-colon `railId` (e.g. `evm-erc20:1:USDC`) — the encoded railId splits back to its exact original while `phaseIndex`/`resolved` remain unescaped fixed segments;
-  - the DACS-2 addresses `dacs2:{jobId}:{scheme}:{identifier}:v{recipeVersion}` and `dacs2:composite:{jobId}:{evaluatedParty}` MUST round-trip a multi-colon `{identifier}` / `{evaluatedParty}` (e.g. `evm:mainnet:0x1234`) while `{scheme}`/`v{recipeVersion}` remain unescaped;
-  - the DACS-5 rating address `dacs5:rating:{jobId}:{rater}` MUST round-trip a multi-colon `{rater}`.
-
-  An address whose variable segments are left raw (unescaped) MUST be rejected as malformed.
-- **CD-1 (canonical decimal).** `"1.50"` and `"1.5"` as `PriceTerm.amount` MUST produce identical agreement hashes and signatures.
-- **SIG-5 (preserve-unknown).** A verifier built against schema vN MUST successfully verify the signature on a document produced under vN+1 that adds an unknown field, by hashing the document as received (unknown field included); a verifier that strips the unknown field before hashing (and thus rejects) FAILS this test.
-
-### 14.7 Governance (GOV-1..GOV-3)
-
-- **GOV-1 steward disclosure.** A registry consumer surfaces which signing key it treats as authoritative and does not present the single steward as a constituted multi-party body.
-- **GOV-2 anchoring-phase disclosure.** An implementation discloses its operating phase (in-code / single-signer / multisig).
-- **GOV-3 anchoring-phase verification.** A consumer reads the resolved recipe's `governance.anchoring` and evaluates each pinned recipeVersion against the phase recorded at pin time; a recipe marked `in-code` is not treated as canonically anchored.
-
-### 14.8 Substrate-capability tests
-
-For substrates other than Demos that claim conformance, additional capability tests apply:
-
-- **SR-1.** Sub-identity binding test: a root key binds N sub-identities, presents under a single SR-1 signature, verifier resolves each to its claim scheme.
-- **SR-2.** Anchor-write → retrieve → content-hash check round-trip; size-cap enforcement.
-- **SR-3.** Fetch-specification → consensus-signed commitment → anchor; body-hash verification by independent consumer. (v0.1 conformance bar is trust-property; v2 will add wire-protocol tests.)
-- **SR-4.** Channel-establish → member-only-message-delivery → non-member-cannot-read; CH-1..CH-6 each as a test (CH-6: channelId unique per session — cross-session offer-replay rejected). (v0.1 trust-property; v2 wire-protocol.)
-- **SR-5.** Cross-chain lock → release with bounded-time atomicity; refund path on counterparty timeout.
-
-### 14.9 Out of scope for v0.1 conformance
-
-The following are not part of v0.1 conformance and SHOULD NOT be tested as such:
-
-- Cross-substrate interoperability for SR-3- or SR-4-dependent phases (deferred to v2).
-- Multi-party transactions beyond bilateral plus sealed-envelope (deferred).
-- Streaming / continuous-flow rails (deferred).
-- Cross-DACS-version pipelines (deferred).
-- Dispute *resolution* flows (DACS-X, anticipated). Divergence *detection* — the two-sided lookup plus canonical-divergence classification and per-party policy of §10.4.3(d) — **is** in scope for v0.1 conformance; only the resolution layer is deferred.
+Moved to **[CONFORMANCE-PLAN.md](CONFORMANCE-PLAN.md)** (section numbering retained). The conformance requirements and golden-vector test plan, per role and per module. Machine-readable fixtures live in [conformance/](../conformance/).
 
 ## References
 

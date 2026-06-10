@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# Authored order: Core first, then the five stage modules.
+# Authored order: Core first, then the five stage modules, then the CORE
+# companion references (moved-out back matter: §A, ch.12, ch.13, ch.14 —
+# section numbering retained, so concatenated grep checks see the same
+# text the unified spec carried).
 SPEC_FILES = [
     "spec/CORE.md",
     "spec/DACS-1-IDENTIFY.md",
@@ -18,6 +21,10 @@ SPEC_FILES = [
     "spec/DACS-3-NEGOTIATE.md",
     "spec/DACS-4-SETTLE.md",
     "spec/DACS-5-VERIFY.md",
+    "spec/DEMOS-MAPPING.md",
+    "spec/THREAT-MODEL.md",
+    "spec/GLOSSARY.md",
+    "spec/CONFORMANCE-PLAN.md",
 ]
 
 
