@@ -448,7 +448,14 @@ A verifier MUST validate the agreement against its referenced listing — checke
 
 Checks 5 and 6 are the two `committedAt`-relative checks — see the ordering note below. Agreements failing any check MUST be rejected by commit-agreement.
 
-**Ordering of the `committedAt`-relative checks.** The deadline and `notAfter` checks above reference `committedAt` — the commitment record's SR-2 anchor timestamp (§8.6) — which only exists *after* the commitment is anchored (§8.6 step 5), later than the value checks at §8.6 step 3. So: the value-independent checks (currency, price-band, rail, deliverable, pattern) gate pre-anchor at step 3; the two `committedAt`-relative checks are authoritative against the anchored `committedAt` — the orchestrator performs a provisional check against the current clock before anchoring, then MUST re-evaluate them against the actual anchored `committedAt`, and any consumer/verifier reading the anchored commitment MUST likewise re-check them against `committedAt`. A commitment whose anchored `committedAt` violates either check is invalid. This keeps `committedAt` the objective anti-backdating clock (the §6.3.4 read-time check still governs discovery) without a circular dependency on an as-yet-unanchored value.
+**Ordering of the `committedAt`-relative checks.** Checks 5 and 6 reference `committedAt` — the commitment record's SR-2 anchor timestamp (§8.6) — which only exists *after* the commitment is anchored (§8.6 step 5). The checks therefore run in two phases:
+
+- **Pre-anchor (§8.6 step 3).** The value-independent checks — currency, price-band, rail, deliverable, pattern — gate here. The orchestrator also runs a *provisional* check of the deadline and `notAfter` against the current clock.
+- **Post-anchor (authoritative).** Once the commitment is anchored, the orchestrator MUST re-evaluate checks 5 and 6 against the actual anchored `committedAt`. Any consumer/verifier reading the anchored commitment MUST likewise re-check them against `committedAt`.
+
+A commitment whose anchored `committedAt` violates either check is invalid.
+
+> **Note (non-normative).** The two-phase discipline keeps `committedAt` the objective anti-backdating clock without a circular dependency on an as-yet-unanchored value. The §6.3.4 read-time check still governs discovery.
 
 ### 8.6 Commitment phase (commit-agreement)
 
