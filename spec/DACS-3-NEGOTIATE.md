@@ -308,7 +308,7 @@ type AgreementDocument = {
 
     deadline: number                   // unix ms; settle-by deadline
 
-    // Optional DAHR-attested reference price snapshot both parties sign against.
+    // Optional SR-3-attested reference price snapshot both parties sign against.
     // When present, both parties attest that price was determined relative to this anchor.
     // Does not replace or constrain terms.price — it is an informational audit record.
     priceAnchor?: PriceAnchor
