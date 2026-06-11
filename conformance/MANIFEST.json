@@ -1716,7 +1716,7 @@
       "want": {
         "bundleCount": 5,
         "completionRate": 0.25,
-        "counterpartyDisputeRate": 0.5,
+        "counterpartyFaultRate": 0.5,
         "bundleRefs": 5
       }
     },
@@ -1730,9 +1730,9 @@
       "want": {
         "bundleCount": 1,
         "completionRate": null,
-        "counterpartyDisputeRate": null,
+        "counterpartyFaultRate": null,
         "completionIsZero": false,
-        "disputeIsZero": false
+        "faultIsZero": false
       }
     },
     {
@@ -1756,7 +1756,7 @@
         "sortedBundleRefs": true,
         "rerunMetrics": {
           "completionRate": 0.25,
-          "counterpartyDisputeRate": 0.5,
+          "counterpartyFaultRate": 0.5,
           "averageBuyerRating": null,
           "averageSellerRating": null,
           "observedTransactionalVolume": []
@@ -1797,7 +1797,7 @@
         "bundleCount": 1,
         "bundleRefs": 1,
         "completionRate": 0,
-        "counterpartyDisputeRate": 1
+        "counterpartyFaultRate": 1
       }
     },
     {
@@ -1810,7 +1810,7 @@
       "want": {
         "bundleCount": 1,
         "completionRate": 0,
-        "counterpartyDisputeRate": 0
+        "counterpartyFaultRate": 0
       }
     },
     {
@@ -1823,7 +1823,7 @@
       "want": {
         "bundleCount": 1,
         "completionRate": 0,
-        "counterpartyDisputeRate": 0
+        "counterpartyFaultRate": 0
       }
     },
     {
@@ -1837,7 +1837,7 @@
         "verifyBundleDecision": "fail",
         "bundleCount": 1,
         "completionRate": 1,
-        "counterpartyDisputeRate": 0,
+        "counterpartyFaultRate": 0,
         "bundleRefs": [
           "DACS-VERIFY-L3-REP-COMPLETED"
         ]
@@ -1853,7 +1853,7 @@
       "want": {
         "bundleCount": 1,
         "completionRate": 1,
-        "counterpartyDisputeRate": 0,
+        "counterpartyFaultRate": 0,
         "bundleRefs": [
           "DACS-VERIFY-L3-REP-COMPLETED"
         ]
@@ -1869,7 +1869,7 @@
       "want": {
         "bundleCount": 1,
         "completionRate": 0,
-        "counterpartyDisputeRate": 0,
+        "counterpartyFaultRate": 0,
         "bundleRefs": [
           "DACS-VERIFY-L3-RECONCILE"
         ]
@@ -1885,7 +1885,7 @@
       "want": {
         "bundleCount": 5,
         "completionRate": 0.25,
-        "counterpartyDisputeRate": 0.25
+        "counterpartyFaultRate": 0.25
       }
     },
     {
@@ -1923,7 +1923,7 @@
       "reason": "reference-verifier-accepted + byte-stable",
       "want": {
         "bundleCount": 1,
-        "counterpartyDisputeRate": 0,
+        "counterpartyFaultRate": 0,
         "completionRate": 0
       }
     },
@@ -1936,7 +1936,7 @@
       "reason": "reference-verifier-accepted + byte-stable",
       "want": {
         "bundleCount": 2,
-        "counterpartyDisputeRate": 0,
+        "counterpartyFaultRate": 0,
         "completionRate": 0,
         "mixedRoleFixtureVerifies": "pass"
       }
