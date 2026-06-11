@@ -816,10 +816,11 @@ A listing’s pipeline declares the order of payment and delivery phases. Common
 | Role | Requirements |
 | --- | --- |
 | Rail author | RD-1 through RD-5 |
+| Orchestrator (rail selection) | RAV-R1 through RAV-R5 |
 | Payment phase handler | PC-1 through PC-7; phase-specific procedure |
 | Delivery phase handler | §9.6 per-kind procedure; SettlementEvidence emission |
 | Pipeline executor | PIPE-1 through PIPE-5 |
-| SettlementEvidence consumer | Canonical hash recomputation; signature validation; amendment chain following |
+| SettlementEvidence consumer | Canonical hash recomputation; signature validation; AMEND-1 through AMEND-4 (amendment chain following) |
 
 ### 9.11 Rationale
 

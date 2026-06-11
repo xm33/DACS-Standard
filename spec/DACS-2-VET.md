@@ -520,7 +520,7 @@ The four decision values are not interchangeable. Each has distinct semantics th
 - **indeterminate** — verification ran cleanly and the authority’s response was parseable but neither confirms nor contradicts the claim. Examples: authority returned a partial-match record; authority returned a status code that signals "result pending"; authority returned a record whose fields are insufficient to make the comparison the recipe requires. The authority gave its answer; the answer just wasn’t conclusive. indeterminate is the authority’s decision being non-binary.
 - **error** — verification could not complete. Transport failure, SR-3 fetch timeout, malformed authority response that the parser cannot consume at all, parser exception, unexpected authority API change. The verifier never received a decision. error is the verifier’s failure to obtain an authority decision, not the authority’s decision to be ambiguous.
 
-**Retry semantics.** (a) error MUST be treated as transient by default; the verifier MAY retry per recipe.retryClass (§7.6.1 below). (b) indeterminate MUST NOT be retried unless the recipe explicitly marks the method as retry-on-indeterminate (rare; reserved for authorities whose "pending" responses become conclusive on re-fetch). The authority’s indeterminate answer is the answer; re-asking does not change it. (c) pass and fail are terminal; no retry.
+**Retry semantics.** (a) error MUST be handled per the recipe's retryClass (§7.6.1): the verifier MAY retry within the VP-R1 budget only when retryClass is `transient`; VP-R3 forbids in-session retry for `permanent`. (b) indeterminate MUST NOT be retried unless the recipe explicitly marks the method as retry-on-indeterminate (rare; reserved for authorities whose "pending" responses become conclusive on re-fetch). The authority’s indeterminate answer is the answer; re-asking does not change it. (c) pass and fail are terminal; no retry.
 
 **Aggregation semantics.** A required claim with overall result error or indeterminate after retry budget exhaustion MUST cause vet-credentials to fail the phase. Consumers MUST NOT treat any of indeterminate, error, or fail as pass under any circumstances. Aggregation logic (§7.7.1) distinguishes the three non-pass outcomes in its failure reasons so downstream consumers (dispute, audit, debugging) can determine whether verification reached the authority at all.
 
@@ -795,11 +795,11 @@ Re-running vet-credentials with the same inputs MUST produce the same composite-
 | Role | Requirements |
 | --- | --- |
 | Method implementer | CM-1 through CM-5 |
-| Recipe author | RA-1 through RA-5 |
+| Recipe author | RA-1 through RA-5; PSP field semantics (§7.3.6) when declaring a ParserSpec |
 | Recipe-availability consumer | RAV-1 through RAV-4 |
-| Recipe steward (availability) | RAV-5 through RAV-7 |
-| Verifier (orchestrator) | VP-R1 through VP-R4; VP-C1 through VP-C3; VPC-1 through VPC-4 |
-| VerifyResult consumer | §7.5.2 attestation resolution; recipe-version pinning |
+| Recipe steward (availability & governance) | RAV-5 through RAV-7; GOV-2; PA-1 through PA-3 |
+| Verifier (orchestrator) | VP-R1 through VP-R4; VP-C1 through VP-C3; VPC-1 through VPC-4; PSP-1 through PSP-5; WN-1 through WN-4 |
+| VerifyResult consumer | §7.5.2 attestation resolution; recipe-version pinning; WN-5, WN-6; GOV-3 |
 | Composite record reader | §7.7.1 aggregation; signature validation |
 
 ### 7.10 Rationale
