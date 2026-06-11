@@ -289,7 +289,10 @@ Two parties producing independent bundles for the same session MUST converge on 
 Consumers MUST:
 
 - (a) fetch both addresses;
-- (b) if exactly one bundle is present, classify the missing side as aborted-by-self per the bundle-suppression rule in §10.11;
+- (b) if exactly one bundle is present, classify by the present copy's signature set:
+  - a copy carrying all §10.4.1 required signatures is the unified session bundle; the missing copy is an anchoring omission, not an abort, and no abort outcome is attributed to either party;
+  - a single-signed copy with an abort outcome is classified per the §10.11 bundle-suppression rule: `aborted-by-self` for the non-signer, `aborted-by-other` for the signer;
+  - a single-signed copy with any other outcome is rejected per §10.4.1, leaving no valid bundle for the session;
 - (c) if both are present and do NOT diverge (canonically equal, or differing only in advisory fields), treat as the unified session bundle — a reputation-deriving consumer prefers the scored party's own anchored copy where they differ advisorily (matching §10.5.1's reconciliation), while a consumer with no scoring context (e.g. an auditor) MAY treat either copy as canonical for non-reputation purposes, since by definition they agree on every contradiction-bearing field;
 - (d) if both are present and canonically diverge (a contradiction per the definition above), treat the session as disputed — each bundle stands on its own signatures and consumers must decide policy (e.g., trust the buyer’s bundle for buyer-reputation, the seller’s for seller-reputation; or flag for human review).
 
