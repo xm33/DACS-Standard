@@ -537,11 +537,16 @@ derive_category_scoped(party, bundles, windowStart, windowEnd, categoryScope):
   return derive(party, category_bundles, windowStart, windowEnd)
 ```
 
-`fetch_category` performs the full two-step resolution: (1) resolve the bundle's `agreementRef` to its `AgreementDocument` (per the §7.5.2 attestation resolution algorithm); (2) resolve that document's `listingRef` to the Listing, verifying the fetched bytes against `listingRef.contentHash`; then return the Listing's `offering.category`. Bundles whose `agreementRef` **or** `listingRef` cannot be resolved (or whose listing content-hash does not match) MUST be excluded from the category-scoped set (not treated as matching any category).
+`fetch_category` performs the full two-step resolution:
+
+- (1) resolve the bundle's `agreementRef` to its `AgreementDocument`, per the §7.5.2 attestation resolution algorithm;
+- (2) resolve that document's `listingRef` to the Listing, verifying the fetched bytes against `listingRef.contentHash`, and return the Listing's `offering.category`.
+
+Bundles whose `agreementRef` **or** `listingRef` cannot be resolved, or whose listing content-hash does not match, MUST be excluded from the category-scoped set — not treated as matching any category.
 
 **`categoryScope` matching rule.** Let `cat = fetch_category(b.agreementRef)` (the resolved listing's `offering.category`). A bundle's category matches `categoryScope` if and only if `cat == categoryScope` OR `cat` starts with `categoryScope + "."`. Examples: scope `"data.finance"` matches `"data.finance"`, `"data.finance.fx"`, `"data.finance.equities"` but NOT `"data.financetools"`.
 
-**Use in `ReputationHint` (§6.3.6).** The `ReputationHint` attached to a `ListingSummary` is computed by applying `derive_category_scoped` with `categoryScope` equal to the listing's `offering.category` (or a prefix thereof — catalogs MAY broaden the scope when the listing category has fewer than a minimum number of qualifying bundles, provided the `reputationHint.categoryScope` field accurately reflects which scope was used). Consumers MUST read `reputationHint.categoryScope` to understand what population is reflected; the hint is only a fast-path pre-filter and MUST be verified against underlying bundles for high-stakes decisions.
+**Use in `ReputationHint` (§6.3.6).** The `ReputationHint` attached to a `ListingSummary` is computed by applying `derive_category_scoped` with `categoryScope` equal to the listing's `offering.category`, or a prefix thereof. Catalogs MAY broaden the scope when the listing category has fewer than a minimum number of qualifying bundles, provided the `reputationHint.categoryScope` field accurately reflects which scope was used. Consumers MUST read `reputationHint.categoryScope` to understand what population is reflected. The hint is only a fast-path pre-filter and MUST be verified against underlying bundles for high-stakes decisions.
 
 **Relationship to §10.5.2 per-primary-claim keying.** Category scoping is an orthogonal filter applied after the per-primary-claim scope; it does not change the identity keying rule.
 
