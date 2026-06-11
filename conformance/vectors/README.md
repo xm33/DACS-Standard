@@ -59,5 +59,5 @@ The validators are stdlib-only. The vector validator checks:
 ## Scope
 
 These vectors are non-normative tooling around the standard. The normative source
-remains [`spec/SPECIFICATION.md`](../../spec/SPECIFICATION.md). When a vector and
+remains the [spec documents](../../spec/). When a vector and
 the specification disagree, the specification wins and the vector should be fixed.
