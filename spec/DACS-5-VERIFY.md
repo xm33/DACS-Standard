@@ -311,7 +311,7 @@ type ReputationDerivation = {
   bundleCount: number
   metrics: {
     completionRate: number | null              // null when party_fault_denom == 0 (bundleCount == 0, or all reconciled bundles failed-substrate)
-    counterpartyDisputeRate: number | null
+    counterpartyFaultRate: number | null
     averageBuyerRating: number | null
     averageSellerRating: number | null
     observedTransactionalVolume: PriceTerm[]   // sum of agreement.terms.price, by currency
@@ -335,7 +335,7 @@ derive(party, bundles, windowStart, windowEnd):
 
   if scoped is empty:
 
-    return ReputationDerivation with bundleCount=0, bundleRefs=[], observedTransactionalVolume=[], and the four scalar metrics (completionRate, counterpartyDisputeRate, averageBuyerRating, averageSellerRating) null
+    return ReputationDerivation with bundleCount=0, bundleRefs=[], observedTransactionalVolume=[], and the four scalar metrics (completionRate, counterpartyFaultRate, averageBuyerRating, averageSellerRating) null
 
   # Per-jobId reconciliation to the scored party's perspective.
   # Two-sided anchoring (§10.4.2) means one jobId may contribute up to two
@@ -392,7 +392,7 @@ derive(party, bundles, windowStart, windowEnd):
 
   completionRate := |completed| / party_fault_denom   when party_fault_denom > 0 else null
 
-  counterpartyDisputeRate := counterparty_fault_count / party_fault_denom  same gate
+  counterpartyFaultRate := counterparty_fault_count / party_fault_denom  same gate
 
   # Collect ratings by fetching each bundle's referenced rating records
 
@@ -438,7 +438,7 @@ derive(party, bundles, windowStart, windowEnd):
 
   volume_terms := []
 
-  for b in reconciled where agreementRef present:
+  for b in reconciled where b.outcome == "completed" AND agreementRef present:
 
     agreement := fetch_and_verify_agreement(b.agreementRef)   // DACS-3 AgreementDocument
 
@@ -474,7 +474,7 @@ Three normative guards apply during reconciliation:
 
 **failed-substrate denominator.** failed-substrate sessions are excluded from the party-fault denominator: party_fault_denom = |outcomes| − |failed_substrate|. This ensures substrate-induced failures do not damage either party’s reputation.
 
-**Null vs empty metrics.** The four **scalar** metrics (completionRate, counterpartyDisputeRate, averageBuyerRating, averageSellerRating) produce numeric values when their denominator > 0. With denominator == 0 (e.g., bundleCount=0, or all sessions failed-substrate) they produce null — distinct from zero, signalling "no signal" rather than "zero signal". The **array** metric `observedTransactionalVolume` (a non-nullable `PriceTerm[]`) and `bundleRefs` (a non-nullable `AttestationRef[]`) produce `[]` on the empty path: an empty list, never null. Every return path therefore yields a schema-total `ReputationDerivation`.
+**Null vs empty metrics.** The four **scalar** metrics (completionRate, counterpartyFaultRate, averageBuyerRating, averageSellerRating) produce numeric values when their denominator > 0. With denominator == 0 (e.g., bundleCount=0, or all sessions failed-substrate) they produce null — distinct from zero, signalling "no signal" rather than "zero signal". The **array** metric `observedTransactionalVolume` (a non-nullable `PriceTerm[]`) and `bundleRefs` (a non-nullable `AttestationRef[]`) produce `[]` on the empty path: an empty list, never null. Every return path therefore yields a schema-total `ReputationDerivation`.
 
 **Rating metrics.** The averageBuyerRating / averageSellerRating metrics are computed by walking each reconciled bundle’s ratingRefs, fetching the referenced RatingRecord, and verifying its signature against the rater’s primary-claim key (the same key class as a BundleSignature, per §10.4.1). A RatingRecord MUST be discarded — not aggregated — unless it binds to the session being scored:
 
@@ -484,7 +484,7 @@ Three normative guards apply during reconciliation:
 
 Only the remaining records’ values, whose target matches the scored party, are aggregated; the metric is null when no qualifying ratings exist.
 
-**Volume metric.** The observedTransactionalVolume metric is computed analogously. For each reconciled bundle whose agreementRef is present, the deriver MUST resolve the AttestationRef to its AgreementDocument via fetch_and_verify_agreement(agreementRef), then sum agreement.terms.price grouped by currency. Resolution follows the §7.5.2 attestation resolution algorithm:
+**Volume metric.** The observedTransactionalVolume metric is computed analogously. For each reconciled bundle whose `outcome` is `completed` and whose agreementRef is present, the deriver MUST resolve the AttestationRef to its AgreementDocument via fetch_and_verify_agreement(agreementRef), then sum agreement.terms.price grouped by currency. Non-completed bundles (failed, aborted) contribute no volume: the metric reports value transacted, not value agreed. Resolution follows the §7.5.2 attestation resolution algorithm:
 
 - fetch the anchor at agreementRef.anchor.locator;
 - compare the hashed bytes to agreementRef.contentHash — a mismatch MUST cause that bundle to be excluded;
@@ -494,7 +494,7 @@ agreementRef is an AttestationRef, not an inline AgreementDocument, so the volum
 
 **Rating de-duplication (normative).** Under two-sided anchoring (§10.4.2) both parties' bundles for one jobId may appear in the input before reconciliation, and `ratingRefs` is an array — so a naive walk would count the same rating more than once. The deriver MUST aggregate at most one rating per `(r.rater, r.jobId, r.targetRole)` tuple, last-writer-wins by `ratedAt` on a tie. A rating therefore contributes once per session-direction, not once per anchored bundle copy or per duplicate ref. (This is a counting rule; RT-1/RT-2 already bound each rating's value range.)
 
-**`completionRate` denominator scope.** `party_fault_denom` excludes only `failed-substrate`; it retains counterparty-fault and abort sessions. This is intentional: `completionRate` measures completed-vs-attempted, not blame. It leaves a residual griefing surface, however — a counterparty that repeatedly opens and aborts sessions depresses the target's `completionRate` through `aborted-by-other`. `counterpartyDisputeRate` partially offsets this (it rises in step over the same denominator), and consumers SHOULD read the two metrics together rather than `completionRate` alone. A blame-weighted completion metric is a roadmap candidate.
+**`completionRate` denominator scope.** `party_fault_denom` excludes only `failed-substrate`; it retains counterparty-fault and abort sessions. This is intentional: `completionRate` measures completed-vs-attempted, not blame. It leaves a residual griefing surface, however — a counterparty that repeatedly opens and aborts sessions depresses the target's `completionRate` through `aborted-by-other`. `counterpartyFaultRate` partially offsets this (it rises in step over the same denominator), and consumers SHOULD read the two metrics together rather than `completionRate` alone. A blame-weighted completion metric is a roadmap candidate.
 
 The windowing predicate above bounds against `b.finalisedAt`, which is a producer-set wall-clock value (§10.4) with no anchoring-time cross-check. Because the bundle is anchored via SR-2, a consensus-attested write time is also available. Consumers performing high-stakes derivation SHOULD bound the window against the bundle’s SR-2 anchor timestamp — the substrate’s consensus-attested write time — rather than, or in addition to, the self-asserted `finalisedAt`. They SHOULD flag a `finalisedAt` that diverges materially from the anchor time. `finalisedAt` is otherwise advisory; the anchor time is authoritative for windowing.
 
@@ -652,7 +652,7 @@ EVM-side consumers MAY read ERC-8004 entries as a discovery surface for DACS-5 b
 
 ### 10.11 Security considerations
 
-**HTLC asymmetric-loss metric blind spot (known residual).** On a window-expired ST-8 asymmetric loss, both legs map to `settle-failed`/`settlement-atomicity` → `failed-counterparty` (§10.3.1). DACS-5 v0.1 cannot distinguish, at the metric level, the **payer who already received destination value** from the **payee who is owed source value** — the payer's copy reads `failed-counterparty` (and, perspective-flipped, may even read as party-fault), so neither `completionRate` nor `counterpartyDisputeRate` reflects who actually profited. This is a DACS-X dispute concern, not resolvable in v0.1's blame model; consumers SHOULD treat any `failed-counterparty` whose phaseSummary carries an HTLC-9 `settlement-atomicity` marker as requiring out-of-band review rather than as a clean counterparty fault.
+**HTLC asymmetric-loss metric blind spot (known residual).** On a window-expired ST-8 asymmetric loss, both legs map to `settle-failed`/`settlement-atomicity` → `failed-counterparty` (§10.3.1). DACS-5 v0.1 cannot distinguish, at the metric level, the **payer who already received destination value** from the **payee who is owed source value** — the payer's copy reads `failed-counterparty` (and, perspective-flipped, may even read as party-fault), so neither `completionRate` nor `counterpartyFaultRate` reflects who actually profited. This is a DACS-X dispute concern, not resolvable in v0.1's blame model; consumers SHOULD treat any `failed-counterparty` whose phaseSummary carries an HTLC-9 `settlement-atomicity` marker as requiring out-of-band review rather than as a clean counterparty fault.
 
 **Bundle forgery.** *Threat:* an attacker produces a fake bundle claiming a session that did not happen, hoping to influence reputation. *Mitigation:* the bundle must be co-signed by both parties; signatures use domain-separated payloads; consumers verify both signatures against the parties’ verified primary claims. A unilateral bundle cannot influence the counterparty’s reputation.
 

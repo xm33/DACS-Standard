@@ -19,7 +19,7 @@
       "averageBuyerRating": null,
       "averageSellerRating": 5.0,
       "completionRate": 1.0,
-      "counterpartyDisputeRate": 0.0,
+      "counterpartyFaultRate": 0.0,
       "observedTransactionalVolume": [
         {
           "amount": "24",
