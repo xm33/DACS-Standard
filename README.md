@@ -142,6 +142,13 @@ python3 -m unittest discover tests -v
 The pull-request workflow runs the same documentation, registry, rule-ID,
 spec-table, conformance-vector, and unit-test checks.
 
+## Community & ecosystem
+
+Tools, reference implementations, integrations, and apps built on DACS live in
+the **[Community repo](https://github.com/DACS-Agent-commerce/Community)** —
+non-normative by construction, one-PR submissions, with an honest conformance
+disclosure per project. The spec, conformance vectors, and CHANGELOG stay here.
+
 ## Governance
 
 DACS v0.1 operates under progressive-anchoring phase **PA-2**: a single steward
